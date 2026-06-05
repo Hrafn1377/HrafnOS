@@ -10,9 +10,11 @@ boot/boot.o: boot/boot.asm
 
 kernel/kernel.o: kernel/kernel.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/kernel.cpp -o kernel/kernel.o
+kernel/serial.o: kernel/serial.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/serial.cpp -o kernel/serial.o
 
-iso/boot/hrafnos.bin: boot/boot.o kernel/kernel.o
-	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin boot/boot.o kernel/kernel.o
+iso/boot/hrafnos.bin: boot/boot.o kernel/kernel.o kernel/serial.o
+	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin boot/boot.o kernel/kernel.o kernel/serial.o
 
 iso: iso/boot/hrafnos.bin
 	x86_64-elf-grub-mkrescue -o hrafnos.iso iso/

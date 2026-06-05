@@ -18,6 +18,10 @@ align 16
 stack_bottom:
     resb 16384
 stack_top:
+align 8
+global g_heap_next
+g_heap_next:
+    resq 1
 
 section .data
 align 16
@@ -28,6 +32,7 @@ gdt:
 gdt_ptr:
     dw 23
     dq gdt
+    dq 0                   ; padding
 
 section .text
 bits 64

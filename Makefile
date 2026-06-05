@@ -1,7 +1,7 @@
 OVMF = /tmp/OVMF.fd
 CXX = x86_64-elf-g++
 ASM = nasm
-CXXFLAGS = -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector -mno-red-zone -std=c++17 -fno-asynchronous-unwind-tables -O1 -fno-pic
+CXXFLAGS = -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector -mno-red-zone -std=c++17 -fno-asynchronous-unwind-tables -O1 -mcmodel=kernel -fno-pic
 
 all: iso/boot/hrafnos.bin
 
@@ -12,9 +12,11 @@ kernel/kernel.o: kernel/kernel.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/kernel.cpp -o kernel/kernel.o
 kernel/serial.o: kernel/serial.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/serial.cpp -o kernel/serial.o
+kernel/heap.o: kernel/heap.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/heap.cpp -o kernel/heap.o
 
-iso/boot/hrafnos.bin: boot/boot.o kernel/kernel.o kernel/serial.o
-	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin boot/boot.o kernel/kernel.o kernel/serial.o
+iso/boot/hrafnos.bin: boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o
+	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o
 
 iso: iso/boot/hrafnos.bin
 	x86_64-elf-grub-mkrescue -o hrafnos.iso iso/

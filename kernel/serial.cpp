@@ -61,7 +61,7 @@ __attribute__((noinline, optimize("O0"))) void kprint_hex(uint32_t n) {
     kprint("0x");
     bool leading = true;
     for (int i = 7; i >= 0; i--) {
-        uint8_t nibble = (n >> (i * 4)) & 0xF;
+        uint32_t nibble = (n >> (i * 4)) & 0xFU;
         if (nibble != 0) leading = false;
         if (!leading) {
             if (nibble < 10) kprint_char('0' + nibble);
@@ -69,4 +69,13 @@ __attribute__((noinline, optimize("O0"))) void kprint_hex(uint32_t n) {
         }
     }
     if (leading) kprint_char('0');
+}
+
+__attribute__((noinline, optimize("O0"))) void kprint_ptr(void* p) {
+    uint64_t addr = (uint64_t)p;
+    uint32_t hi = (uint32_t)(addr >> 32);
+    uint32_t lo = (uint32_t)(addr & 0xFFFFFFFF);
+    kprint("0x");
+    if (hi != 0) kprint_hex(hi);
+    kprint_hex(lo);
 }

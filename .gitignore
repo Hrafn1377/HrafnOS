@@ -1,0 +1,3 @@
+*.o
+*.iso
+iso/boot/hrafnos.bin

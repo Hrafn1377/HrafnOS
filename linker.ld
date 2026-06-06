@@ -11,8 +11,5 @@ SECTIONS
     .bss       : {
         *(.bss*)
         *(COMMON)
-        . = ALIGN(8);
-        heap_ptr_loc = .;
-        . += 8;
     }
 }

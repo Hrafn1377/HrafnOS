@@ -1,7 +1,7 @@
 OVMF = /tmp/OVMF.fd
 CXX = x86_64-elf-g++
 ASM = nasm
-CXXFLAGS = -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector -mno-red-zone -std=c++17 -fno-asynchronous-unwind-tables -O1 -mcmodel=kernel -fno-pic
+CXXFLAGS = -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector -mno-red-zone -std=c++17 -fno-asynchronous-unwind-tables -fno-strict-aliasing -O1 -mcmodel=kernel -fno-pic
 
 all: iso/boot/hrafnos.bin
 

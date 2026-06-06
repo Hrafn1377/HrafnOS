@@ -11,27 +11,27 @@ static inline uint8_t inb(uint16_t port) {
 }
 
 void serial_init() {
-    outb(0x3F9, 0x00);
-    outb(0x3FB, 0x80);
-    outb(0x3F8, 0x03);
-    outb(0x3F9, 0x00);
-    outb(0x3FB, 0x03);
-    outb(0x3FA, 0xC7);
-    outb(0x3FC, 0x0B);
+    outb(0x3F9, 0x00);   // disable interrupts
+    outb(0x3FB, 0x80);   // enable DLAB (set baud divisor)
+    outb(0x3F8, 0x03);   // divisor low  -> 38400 baud
+    outb(0x3F9, 0x00);   // divisor high
+    outb(0x3FB, 0x03);   // 8 bits, no parity, one stop bit; clear DLAB
+    outb(0x3FA, 0xC7);   // enable FIFO, clear, 14-byte threshold
+    outb(0x3FC, 0x0B);   // DTR, RTS, OUT2
 }
 
 void kprint_char(char c) {
+    while (!(inb(0x3FD) & 0x20)) { }   // wait until transmit holding reg empty
     outb(0x3F8, c);
 }
 
 void kprint(const char* str) {
-    const volatile char* s = str;
-    for (int i = 0; s[i] != 0; i++) {
-        kprint_char(s[i]);
+    for (int i = 0; str[i] != 0; i++) {
+        kprint_char(str[i]);
     }
 }
 
-__attribute__((noinline, optimize("O0"))) void kprint_uint(uint32_t n) {
+void kprint_uint(uint32_t n) {
     if (n == 0) { kprint_char('0'); return; }
 
     uint8_t d;
@@ -57,7 +57,7 @@ __attribute__((noinline, optimize("O0"))) void kprint_uint(uint32_t n) {
     kprint_char('0' + n);
 }
 
-__attribute__((noinline, optimize("O0"))) void kprint_hex(uint32_t n) {
+void kprint_hex(uint32_t n) {
     kprint("0x");
     bool leading = true;
     for (int i = 7; i >= 0; i--) {
@@ -71,11 +71,12 @@ __attribute__((noinline, optimize("O0"))) void kprint_hex(uint32_t n) {
     if (leading) kprint_char('0');
 }
 
-__attribute__((noinline, optimize("O0"))) void kprint_ptr(void* p) {
+void kprint_ptr(void* p) {
     uint64_t addr = (uint64_t)p;
-    uint32_t hi = (uint32_t)(addr >> 32);
-    uint32_t lo = (uint32_t)(addr & 0xFFFFFFFF);
     kprint("0x");
-    if (hi != 0) kprint_hex(hi);
-    kprint_hex(lo);
+    for (int i = 15; i >= 0; i--) {                  // 16 nibbles, zero-padded
+        uint32_t nibble = (uint32_t)((addr >> (i * 4)) & 0xF);
+        if (nibble < 10) kprint_char('0' + nibble);
+        else kprint_char('A' + nibble - 10);
+    }
 }

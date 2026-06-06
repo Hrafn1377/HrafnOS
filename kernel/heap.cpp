@@ -1,21 +1,21 @@
 #include "heap.hpp"
-#include "serial.hpp"
 
-void heap_init(Heap* h) {
-    h->next = 0x1000000ULL;  // 16MB
-    h->end  = 0x2000000ULL;  // 32MB
+#define HEAP_START 0x2000000ULL
+#define HEAP_END   0x7000000ULL
+
+extern "C" uint64_t asm_get_heap();
+extern "C" void     asm_set_heap(uint64_t val);
+
+void heap_init() {
+    asm_set_heap(HEAP_START);
 }
 
-__attribute__((noinline, optimize("O0"))) void* kmalloc(Heap* h, uint32_t size) {
-    volatile uint64_t* next_ptr = &h->next;
-    uint64_t cur = *next_ptr;
+void* kmalloc(uint32_t size) {
     if (size == 0) return nullptr;
-    size = (size + 7) & ~7;
+    size = (size + 7) & ~7U;                 // round up to 8-byte alignment
+    uint64_t cur = asm_get_heap();
     uint64_t nxt = cur + (uint64_t)size;
-    if (nxt > h->end) {
-        kprint("oom\n");
-        return nullptr;
-    }
-    *next_ptr = nxt;
+    if (nxt > HEAP_END) return nullptr;      // out of heap
+    asm_set_heap(nxt);
     return (void*)cur;
 }

@@ -19,7 +19,6 @@ struct idt_ptr {
     uint64_t base;
 } __attribute__((packed));
 
-// Must match the push order in isr.asm exactly.
 struct registers {
     uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
     uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
@@ -32,7 +31,7 @@ static idt_entry idt[256];
 static idt_ptr   idtr;
 
 extern "C" void* isr_stub_table[];
-extern "C" void syscall_stub();
+extern "C" void  syscall_stub();
 
 static const char* exception_names[32] = {
     "#DE Divide Error", "#DB Debug", "NMI", "#BP Breakpoint",
@@ -59,14 +58,14 @@ static void idt_set_gate_ex(int n, void* handler, uint8_t type_attr) {
 }
 
 static void idt_set_gate(int n, void* handler) {
-    idt_set_gate_ex(n, handler, 0x8E);          // present, ring0, interrupt gate
+    idt_set_gate_ex(n, handler, 0x8E);
 }
 
 void idt_init() {
     idtr.limit = sizeof(idt) - 1;
     idtr.base  = (uint64_t)&idt;
     for (int i = 0; i < 49; i++) idt_set_gate(i, isr_stub_table[i]);
-    idt_set_gate_ex(0x80, (void*)syscall_stub, 0xEE);  // DPL3 syscall gate
+    idt_set_gate_ex(0x80, (void*)syscall_stub, 0xEE);   // DPL3 syscall gate
     asm volatile("lidt %0" : : "m"(idtr));
 }
 
@@ -76,31 +75,47 @@ static void dump_reg(const char* name, uint64_t value) {
     kprint_ptr((void*)value);
 }
 
-// Returns the stack pointer to resume on. For a timer tick the scheduler
-// may hand back a different task's stack, switching context.
 extern "C" uint64_t isr_handler(registers* regs) {
     if (regs->int_no >= 32 && regs->int_no < 48) {
         uint8_t irq = (uint8_t)(regs->int_no - 32);
         if (irq == 0) {
             pic_send_eoi(0);
-            sched_tick();                       // advance the tick clock
-            return schedule((uint64_t)regs);    // may switch tasks
+            sched_tick();
+            return schedule((uint64_t)regs);
         }
         pic_send_eoi(irq);
         return (uint64_t)regs;
     }
 
     if (regs->int_no == 48) {                   // software yield (int $0x30)
-        return schedule((uint64_t)regs);        // no EOI, no tick advance
+        return schedule((uint64_t)regs);
     }
 
     if (regs->int_no == 0x80) {                 // system call (int $0x80)
         switch (regs->rax) {
-            case SYS_WRITE:
-                kprint((const char*)regs->rdi);
-                regs->rax = 0;
+            case SYS_WRITE: {
+                const char* buf = (const char*)regs->rsi;
+                uint64_t    len = regs->rdx;
+                for (uint64_t i = 0; i < len; i++) kprint_char(buf[i]);
+                regs->rax = len;
                 break;
+            }
+            case SYS_READ: {
+                char*    buf = (char*)regs->rsi;
+                uint64_t len = regs->rdx;
+                uint64_t n   = 0;
+                while (n < len) {
+                    int c = serial_getchar();
+                    if (c < 0) break;
+                    buf[n++] = (char)c;
+                }
+                regs->rax = n;
+                break;
+            }
             case SYS_YIELD:
+                return schedule((uint64_t)regs);
+            case SYS_EXIT:
+                sched_kill_current();
                 return schedule((uint64_t)regs);
             default:
                 regs->rax = (uint64_t)-1;
@@ -123,7 +138,6 @@ extern "C" uint64_t isr_handler(registers* regs) {
     kprint("  CS="); kprint_hex((uint32_t)regs->cs);
     kprint("  RFLAGS="); kprint_hex((uint32_t)regs->rflags);
     kprint_char('\n');
-
     dump_reg("RAX", regs->rax); dump_reg("  RBX", regs->rbx);
     dump_reg("  RCX", regs->rcx); dump_reg("  RDX", regs->rdx);
     kprint_char('\n');
@@ -141,5 +155,5 @@ extern "C" uint64_t isr_handler(registers* regs) {
     kprint("Halting.\n");
     asm volatile("cli");
     for (;;) asm volatile("hlt");
-    return (uint64_t)regs;   // unreachable
+    return (uint64_t)regs;
 }

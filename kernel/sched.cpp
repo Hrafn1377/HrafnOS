@@ -85,6 +85,10 @@ uint64_t schedule(uint64_t rsp) {
     return current->rsp;
 }
 
+void sched_kill_current() {
+    if (current) current->state = DEAD;
+}
+
 void task_yield() { asm volatile("int $0x30"); }
 
 void task_sleep(uint64_t ticks) {

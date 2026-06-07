@@ -7,3 +7,6 @@ void kprint_uint(uint32_t n);
 void kprint_hex(uint32_t n);
 void kprint_char(char c);
 void kprint_ptr(void* p);
+
+// Non-blocking serial read: returns the next received byte, or -1 if none.
+int  serial_getchar();

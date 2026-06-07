@@ -11,11 +11,13 @@ USER_CXXFLAGS = -ffreestanding -fno-exceptions -fno-rtti -fno-stack-protector -m
 
 all: iso/boot/hrafnos.bin
 
-# ---- user program -> ELF, embedded into the kernel ----
-user.elf: user_prog.cpp user.ld
-	$(CXX) $(USER_CXXFLAGS) -T user.ld -o user.elf user_prog.cpp
+# ---- user programs -> ELFs, embedded into the kernel as the ramdisk ----
+one.elf: one.cpp user.ld
+	$(CXX) $(USER_CXXFLAGS) -T user.ld -o one.elf one.cpp
+two.elf: two.cpp user.ld
+	$(CXX) $(USER_CXXFLAGS) -T user.ld -o two.elf two.cpp
 
-kernel/embed.o: kernel/embed.asm user.elf
+kernel/embed.o: kernel/embed.asm one.elf two.elf
 	$(ASM) -f elf64 kernel/embed.asm -o kernel/embed.o
 
 # ---- kernel ----
@@ -45,8 +47,10 @@ kernel/sched.o: kernel/sched.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/sched.cpp -o kernel/sched.o
 kernel/elf.o: kernel/elf.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/elf.cpp -o kernel/elf.o
+kernel/ramdisk.o: kernel/ramdisk.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/ramdisk.cpp -o kernel/ramdisk.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/embed.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/ramdisk.o kernel/embed.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)
@@ -65,4 +69,4 @@ run: iso
 		-serial mon:stdio
 
 clean:
-	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso user.elf
+	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso one.elf two.elf user.elf

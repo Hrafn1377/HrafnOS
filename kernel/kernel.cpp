@@ -7,12 +7,38 @@
 #include "heap.hpp"
 #include "sched.hpp"
 #include "elf.hpp"
-
-// The compiled user program, embedded by embed.asm via incbin.
-extern "C" uint8_t user_elf_start[];
-extern "C" uint8_t user_elf_end[];
+#include "ramdisk.hpp"
 
 #define USER_STACK_TOP 0x8000100000ULL     // above the loaded ELF segments
+
+// Look a program up in the ramdisk, load it into a fresh address space, give it
+// a user stack, and queue it as a ring-3 task. (This is the path exec will reuse.)
+static void spawn(const char* name) {
+    uint8_t* elf = ramdisk_lookup(name);
+    if (!elf) {
+        kprint("spawn: not found: ");
+        kprint(name);
+        kprint_char('\n');
+        return;
+    }
+
+    uint64_t  entry = 0;
+    uint64_t* space = elf_load(elf, &entry);
+    if (!space) {
+        kprint("spawn: load failed: ");
+        kprint(name);
+        kprint_char('\n');
+        return;
+    }
+
+    for (uint64_t off = 0; off < 0x4000; off += FRAME_SIZE) {
+        uint64_t f = (uint64_t)pmm_alloc_frame();
+        vmm_map_page_in(space, (USER_STACK_TOP - 0x4000) + off, f,
+                        PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    }
+
+    task_create_user(space, entry, USER_STACK_TOP);
+}
 
 extern "C" void kmain(uint64_t mb_info) {
     serial_init();
@@ -35,30 +61,22 @@ extern "C" void kmain(uint64_t mb_info) {
     heap_init();
     kprint("Heap ready.\n");
 
-    // Parse and load the embedded ELF into its own address space.
-    uint64_t  entry = 0;
-    uint64_t* space = elf_load(user_elf_start, &entry);
-    if (!space) {
-        kprint("ELF load failed; halting.\n");
-        for (;;) asm volatile("hlt");
+    // Show the ramdisk directory, straight off the table.
+    kprint("ramdisk: ");
+    for (uint32_t i = 0; i < ramdisk_count(); i++) {
+        const ramdisk_entry* e = ramdisk_get(i);
+        kprint(e->name);
+        kprint(" (");
+        kprint_uint((uint32_t)(e->end - e->start));
+        kprint(" bytes)");
+        if (i + 1 < ramdisk_count()) kprint(", ");
     }
-
-    // Give the process a user stack.
-    for (uint64_t off = 0; off < 0x4000; off += FRAME_SIZE) {
-        uint64_t f = (uint64_t)pmm_alloc_frame();
-        vmm_map_page_in(space, (USER_STACK_TOP - 0x4000) + off, f,
-                        PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
-    }
-
-    kprint("Loaded ELF (");
-    kprint_uint((uint32_t)(user_elf_end - user_elf_start));
-    kprint(" bytes), entry = ");
-    kprint_ptr((void*)entry);
     kprint_char('\n');
 
     sched_init();
-    task_create_user(space, entry, USER_STACK_TOP);
-    kprint("Running compiled program at ring 3:\n");
+    spawn("one");
+    spawn("two");
+    kprint("Running ramdisk programs at ring 3:\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

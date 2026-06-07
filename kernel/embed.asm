@@ -1,7 +1,14 @@
-; Embeds the compiled user ELF into the kernel image as raw bytes.
+; The ramdisk: each program's ELF embedded as raw bytes, bracketed by symbols.
 section .rodata
-global user_elf_start
-global user_elf_end
-user_elf_start:
-    incbin "user.elf"
-user_elf_end:
+
+global prog_one_start
+global prog_one_end
+prog_one_start:
+    incbin "one.elf"
+prog_one_end:
+
+global prog_two_start
+global prog_two_end
+prog_two_start:
+    incbin "two.elf"
+prog_two_end:

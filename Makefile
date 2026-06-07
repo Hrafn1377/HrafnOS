@@ -12,6 +12,8 @@ boot/boot.o: boot/boot.asm
 
 kernel/isr.o: kernel/isr.asm
 	$(ASM) -f elf64 kernel/isr.asm -o kernel/isr.o
+kernel/user.o: kernel/user.asm
+	$(ASM) -f elf64 kernel/user.asm -o kernel/user.o
 kernel/gdt.o: kernel/gdt.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/gdt.cpp -o kernel/gdt.o
 
@@ -32,7 +34,7 @@ kernel/vmm.o: kernel/vmm.cpp
 kernel/sched.o: kernel/sched.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/sched.cpp -o kernel/sched.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/user.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)

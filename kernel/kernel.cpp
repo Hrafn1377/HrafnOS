@@ -1,4 +1,5 @@
 #include "serial.hpp"
+#include "gdt.hpp"
 #include "idt.hpp"
 #include "pic.hpp"
 #include "pmm.hpp"
@@ -6,44 +7,37 @@
 #include "heap.hpp"
 #include "sched.hpp"
 #include "spinlock.hpp"
+#include "syscall.hpp"
 
 static spinlock print_lock = { 0 };
 
-static void say(const char* s) {
-    spin_lock(&print_lock);
-    kprint(s);
-    spin_unlock(&print_lock);
-}
-
-// Prints [A] twice a second, forever.
-static void task_a() {
+// Prints directly, in the kernel (ring 0).
+static void task_direct() {
     for (;;) {
-        say("[A]");
-        task_sleep(50);          // 50 ticks @ 100 Hz = 0.5 s
+        spin_lock(&print_lock);
+        kprint("[direct]");
+        spin_unlock(&print_lock);
+        task_sleep(60);
     }
 }
 
-// Prints [B] once a second, forever.
-static void task_b() {
+// Prints by asking the kernel through a system call (int $0x80) instead of
+// calling kprint itself — exercising the full syscall path.
+static void task_syscall() {
     for (;;) {
-        say("[B]");
-        task_sleep(100);         // 1.0 s
+        spin_lock(&print_lock);
+        sys_write("[syscall]");
+        spin_unlock(&print_lock);
+        task_sleep(60);
     }
-}
-
-// Prints [C] three times, then exits — after which no more [C] appears.
-static void task_c() {
-    for (int i = 0; i < 3; i++) {
-        say("[C]");
-        task_sleep(75);          // 0.75 s
-    }
-    say("[C done]");
-    task_exit();                 // never returns
 }
 
 extern "C" void kmain(uint64_t mb_info) {
     serial_init();
     kprint("HrafnOS booting...\n");
+
+    gdt_init();
+    kprint("GDT/TSS installed (kernel + user segments).\n");
 
     idt_init();
     pic_remap();
@@ -64,10 +58,9 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint("Heap ready.\n");
 
     sched_init();
-    task_create(task_a);
-    task_create(task_b);
-    task_create(task_c);
-    kprint("Scheduler: 3 tasks (sleep/exit/locking). Go.\n");
+    task_create(task_direct);
+    task_create(task_syscall);
+    kprint("Scheduler: direct vs. syscall printing. Go.\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

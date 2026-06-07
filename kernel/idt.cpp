@@ -2,6 +2,7 @@
 #include "serial.hpp"
 #include "pic.hpp"
 #include "sched.hpp"
+#include "syscall.hpp"
 
 struct idt_entry {
     uint16_t offset_low;
@@ -31,6 +32,7 @@ static idt_entry idt[256];
 static idt_ptr   idtr;
 
 extern "C" void* isr_stub_table[];
+extern "C" void syscall_stub();
 
 static const char* exception_names[32] = {
     "#DE Divide Error", "#DB Debug", "NMI", "#BP Breakpoint",
@@ -45,21 +47,26 @@ static const char* exception_names[32] = {
     "#HV Hypervisor", "#VC VMM Comm", "#SX Security", "Reserved"
 };
 
-static void idt_set_gate(int n, void* handler) {
+static void idt_set_gate_ex(int n, void* handler, uint8_t type_attr) {
     uint64_t addr      = (uint64_t)handler;
     idt[n].offset_low  = addr & 0xFFFF;
     idt[n].selector    = 0x08;
     idt[n].ist         = 0;
-    idt[n].type_attr   = 0x8E;
+    idt[n].type_attr   = type_attr;
     idt[n].offset_mid  = (addr >> 16) & 0xFFFF;
     idt[n].offset_high = (addr >> 32) & 0xFFFFFFFF;
     idt[n].zero        = 0;
+}
+
+static void idt_set_gate(int n, void* handler) {
+    idt_set_gate_ex(n, handler, 0x8E);          // present, ring0, interrupt gate
 }
 
 void idt_init() {
     idtr.limit = sizeof(idt) - 1;
     idtr.base  = (uint64_t)&idt;
     for (int i = 0; i < 49; i++) idt_set_gate(i, isr_stub_table[i]);
+    idt_set_gate_ex(0x80, (void*)syscall_stub, 0xEE);  // DPL3 syscall gate
     asm volatile("lidt %0" : : "m"(idtr));
 }
 
@@ -85,6 +92,21 @@ extern "C" uint64_t isr_handler(registers* regs) {
 
     if (regs->int_no == 48) {                   // software yield (int $0x30)
         return schedule((uint64_t)regs);        // no EOI, no tick advance
+    }
+
+    if (regs->int_no == 0x80) {                 // system call (int $0x80)
+        switch (regs->rax) {
+            case SYS_WRITE:
+                kprint((const char*)regs->rdi);
+                regs->rax = 0;
+                break;
+            case SYS_YIELD:
+                return schedule((uint64_t)regs);
+            default:
+                regs->rax = (uint64_t)-1;
+                break;
+        }
+        return (uint64_t)regs;
     }
 
     // CPU exception: dump registers and halt.

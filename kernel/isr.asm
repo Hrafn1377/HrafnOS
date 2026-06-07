@@ -83,6 +83,12 @@ ISR_NOERR 46
 ISR_NOERR 47
 ISR_NOERR 48     ; software yield / reschedule
 
+global syscall_stub
+syscall_stub:
+    push 0
+    push 0x80
+    jmp isr_common
+
 isr_common:
     push rax
     push rbx

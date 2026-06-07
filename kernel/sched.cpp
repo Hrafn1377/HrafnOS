@@ -1,6 +1,7 @@
 #include "sched.hpp"
 #include "heap.hpp"
 #include "gdt.hpp"
+#include "vmm.hpp"
 
 #define STACK_SIZE 16384
 
@@ -12,7 +13,8 @@ void sched_init() {
     boot->next       = boot;
     boot->state      = RUNNABLE;
     boot->wake_tick  = 0;
-    boot->kstack_top = 0;          // idle runs in ring 0; RSP0 never used for it
+    boot->kstack_top = 0;
+    boot->pml4       = vmm_kernel_space();   // idle runs in the kernel space
     current = boot;
 }
 
@@ -24,7 +26,7 @@ task* task_create(void (*entry)()) {
     uint64_t* sp = (uint64_t*)stack_top;
     *--sp = 0x10;                 // ss  (kernel data)
     *--sp = stack_top - 8;        // rsp
-    *--sp = 0x202;                // rflags (IF=1)
+    *--sp = 0x202;                // rflags
     *--sp = 0x08;                 // cs  (kernel code)
     *--sp = (uint64_t)entry;      // rip
     *--sp = 0;                    // err_code
@@ -34,24 +36,24 @@ task* task_create(void (*entry)()) {
     t->rsp        = (uint64_t)sp;
     t->state      = RUNNABLE;
     t->wake_tick  = 0;
-    t->kstack_top = stack_top;    // ring0 task: its own stack
+    t->kstack_top = stack_top;
+    t->pml4       = vmm_kernel_space();
     t->next       = current->next;
     current->next = t;
     return t;
 }
 
-task* task_create_user(uint64_t entry, uint64_t user_stack_top) {
+task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) {
     task*    t          = (task*)kmalloc(sizeof(task));
     uint64_t kstack     = (uint64_t)kmalloc(STACK_SIZE);
     uint64_t kstack_top = (kstack + STACK_SIZE) & ~15ULL;
 
-    // Fabricate a frame that iretq will drop into ring 3: CS/SS carry RPL 3.
     uint64_t* sp = (uint64_t*)kstack_top;
-    *--sp = 0x23;                 // ss  = user data (0x20) | RPL 3
+    *--sp = 0x23;                 // ss  = user data | RPL 3
     *--sp = user_stack_top;       // rsp = user stack
     *--sp = 0x202;                // rflags (IF=1)
-    *--sp = 0x1B;                 // cs  = user code (0x18) | RPL 3
-    *--sp = entry;                // rip = user entry point
+    *--sp = 0x1B;                 // cs  = user code | RPL 3
+    *--sp = entry;                // rip
     *--sp = 0;                    // err_code
     *--sp = 0;                    // int_no
     for (int i = 0; i < 15; i++) *--sp = 0;
@@ -59,7 +61,8 @@ task* task_create_user(uint64_t entry, uint64_t user_stack_top) {
     t->rsp        = (uint64_t)sp;
     t->state      = RUNNABLE;
     t->wake_tick  = 0;
-    t->kstack_top = kstack_top;   // RSP0: where this task's ring3->0 frames land
+    t->kstack_top = kstack_top;
+    t->pml4       = pml4;         // this process's private address space
     t->next       = current->next;
     current->next = t;
     return t;
@@ -81,12 +84,9 @@ uint64_t schedule(uint64_t rsp) {
     while (n->state != RUNNABLE) n = n->next;
     current = n;
 
-    tss_set_rsp0(current->kstack_top);   // CPU loads this on the next ring3->0
+    tss_set_rsp0(current->kstack_top);   // kernel stack for ring3 -> ring0
+    vmm_switch(current->pml4);            // switch to this task's address space
     return current->rsp;
-}
-
-void sched_kill_current() {
-    if (current) current->state = DEAD;
 }
 
 void task_yield() { asm volatile("int $0x30"); }
@@ -96,6 +96,8 @@ void task_sleep(uint64_t ticks) {
     current->state     = SLEEPING;
     task_yield();
 }
+
+void sched_kill_current() { if (current) current->state = DEAD; }
 
 void task_exit() {
     current->state = DEAD;

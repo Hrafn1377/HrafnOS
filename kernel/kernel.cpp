@@ -7,16 +7,38 @@
 #include "heap.hpp"
 #include "sched.hpp"
 
-extern "C" uint8_t user_program_start[];
-extern "C" uint8_t user_program_end[];
+extern "C" uint8_t user_a_start[];
+extern "C" uint8_t user_a_end[];
+extern "C" uint8_t user_b_start[];
+extern "C" uint8_t user_b_end[];
 
-#define USER_CODE      0x800000000ULL
-#define USER_STACK_TOP 0x800005000ULL
+#define USER_CODE      0x8000000000ULL     // 512 GiB -> PML4[1] (private per process)
+#define USER_STACK_TOP 0x8000005000ULL
 
 static void kmemcpy(void* dst, const void* src, uint64_t n) {
     uint8_t* d = (uint8_t*)dst;
     const uint8_t* s = (const uint8_t*)src;
     for (uint64_t i = 0; i < n; i++) d[i] = s[i];
+}
+
+// Build a process: its own address space, with `prog` copied to a code page and
+// stack pages, all at the SAME virtual addresses as every other process.
+static uint64_t* make_process(uint8_t* prog_start, uint8_t* prog_end) {
+    uint64_t* space = vmm_create_address_space();
+
+    // Code page: populate the physical frame via its identity address, then
+    // map it into this process at USER_CODE.
+    uint64_t code = (uint64_t)pmm_alloc_frame();
+    kmemcpy((void*)code, prog_start, (uint64_t)(prog_end - prog_start));
+    vmm_map_page_in(space, USER_CODE, code, PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+
+    // Stack pages.
+    for (uint64_t off = 0; off < 0x4000; off += FRAME_SIZE) {
+        uint64_t f = (uint64_t)pmm_alloc_frame();
+        vmm_map_page_in(space, (USER_STACK_TOP - 0x4000) + off, f,
+                        PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    }
+    return space;
 }
 
 extern "C" void kmain(uint64_t mb_info) {
@@ -40,23 +62,16 @@ extern "C" void kmain(uint64_t mb_info) {
     heap_init();
     kprint("Heap ready.\n");
 
-    // Map and load the userspace program.
-    void* code_frame = pmm_alloc_frame();
-    vmm_map_page(USER_CODE, (uint64_t)code_frame,
-                 PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
-    for (uint64_t off = 0; off < 0x4000; off += FRAME_SIZE) {
-        void* f = pmm_alloc_frame();
-        vmm_map_page((USER_STACK_TOP - 0x4000) + off, (uint64_t)f,
-                     PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
-    }
-    kmemcpy((void*)USER_CODE, user_program_start,
-            (uint64_t)(user_program_end - user_program_start));
+    // Two processes, each in its own address space, both with code at the
+    // identical virtual address 0x8000000000 but different physical memory.
+    uint64_t* spaceA = make_process(user_a_start, user_a_end);
+    uint64_t* spaceB = make_process(user_b_start, user_b_end);
 
     sched_init();
-    task_create_user(USER_CODE, USER_STACK_TOP);
+    task_create_user(spaceA, USER_CODE, USER_STACK_TOP);
+    task_create_user(spaceB, USER_CODE, USER_STACK_TOP);
 
-    kprint("\nRing-3 shell echo. Type letters (echoed UPPERCASE); 'q' quits.\n");
-    kprint("> ");
+    kprint("Two processes, same vaddr (0x8000000000), separate address spaces:\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

@@ -112,6 +112,12 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 regs->rax = n;
                 break;
             }
+            case SYS_EXEC: {
+                uint64_t new_rsp = exec_current((const char*)regs->rdi);
+                if (new_rsp) return new_rsp;   // resume in the new program
+                regs->rax = (uint64_t)-1;       // load failed; tell the caller
+                break;
+            }
             case SYS_YIELD:
                 return schedule((uint64_t)regs);
             case SYS_EXIT:

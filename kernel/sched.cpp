@@ -2,6 +2,10 @@
 #include "heap.hpp"
 #include "gdt.hpp"
 #include "vmm.hpp"
+#include "pmm.hpp"
+#include "elf.hpp"
+#include "ramdisk.hpp"
+#include "userspace.hpp"
 
 #define STACK_SIZE 16384
 
@@ -66,6 +70,47 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
     t->next       = current->next;
     current->next = t;
     return t;
+}
+
+uint64_t exec_current(const char* name) {
+    uint8_t* elf = ramdisk_lookup(name);
+    if (!elf) return 0;
+
+    // Load into a fresh address space. (elf bytes live in the kernel ramdisk,
+    // and `name` is read here while the caller's address space is still active.)
+    uint64_t  entry = 0;
+    uint64_t* space = elf_load(elf, &entry);
+    if (!space) return 0;
+
+    // Give the new image a user stack.
+    for (uint64_t off = 0; off < USER_STACK_SIZE; off += FRAME_SIZE) {
+        uint64_t f = (uint64_t)pmm_alloc_frame();
+        vmm_map_page_in(space, (USER_STACK_TOP - USER_STACK_SIZE) + off, f,
+                        PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    }
+
+    // Replace this task's address space. (The old user pages + page tables and
+    // the old PML4 leak for now -- freeing them is the next cleanup.)
+    current->pml4 = space;
+
+    // Fabricate a fresh ring-3 entry frame at the top of our kernel stack,
+    // exactly where the original syscall frame sat. This sits above the live
+    // isr_handler stack usage, so nothing in flight is clobbered.
+    uint64_t* sp = (uint64_t*)current->kstack_top;
+    *--sp = 0x23;                 // ss  = user data | RPL 3
+    *--sp = USER_STACK_TOP;       // rsp = user stack
+    *--sp = 0x202;                // rflags (IF=1)
+    *--sp = 0x1B;                 // cs  = user code | RPL 3
+    *--sp = entry;                // rip = new entry point
+    *--sp = 0;                    // err_code
+    *--sp = 0;                    // int_no
+    for (int i = 0; i < 15; i++) *--sp = 0;
+    current->rsp = (uint64_t)sp;
+
+    // The iretq in isr_common has no CR3 switch of its own, so activate the new
+    // address space now. Kernel code + stack are in the shared PML4[0].
+    vmm_switch(space);
+    return current->rsp;
 }
 
 void sched_tick() { g_ticks++; }

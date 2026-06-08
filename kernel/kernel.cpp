@@ -8,11 +8,10 @@
 #include "sched.hpp"
 #include "elf.hpp"
 #include "ramdisk.hpp"
-
-#define USER_STACK_TOP 0x8000100000ULL     // above the loaded ELF segments
+#include "userspace.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
-// a user stack, and queue it as a ring-3 task. (This is the path exec will reuse.)
+// a user stack, and queue it as a ring-3 task.
 static void spawn(const char* name) {
     uint8_t* elf = ramdisk_lookup(name);
     if (!elf) {
@@ -31,9 +30,9 @@ static void spawn(const char* name) {
         return;
     }
 
-    for (uint64_t off = 0; off < 0x4000; off += FRAME_SIZE) {
+    for (uint64_t off = 0; off < USER_STACK_SIZE; off += FRAME_SIZE) {
         uint64_t f = (uint64_t)pmm_alloc_frame();
-        vmm_map_page_in(space, (USER_STACK_TOP - 0x4000) + off, f,
+        vmm_map_page_in(space, (USER_STACK_TOP - USER_STACK_SIZE) + off, f,
                         PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
     }
 
@@ -61,7 +60,6 @@ extern "C" void kmain(uint64_t mb_info) {
     heap_init();
     kprint("Heap ready.\n");
 
-    // Show the ramdisk directory, straight off the table.
     kprint("ramdisk: ");
     for (uint32_t i = 0; i < ramdisk_count(); i++) {
         const ramdisk_entry* e = ramdisk_get(i);
@@ -75,8 +73,7 @@ extern "C" void kmain(uint64_t mb_info) {
 
     sched_init();
     spawn("one");
-    spawn("two");
-    kprint("Running ramdisk programs at ring 3:\n");
+    kprint("Running 'one' at ring 3 (it will exec 'two'):\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

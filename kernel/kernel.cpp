@@ -73,7 +73,7 @@ extern "C" void kmain(uint64_t mb_info) {
 
     sched_init();
     spawn("one");
-    kprint("Running 'one' at ring 3 (it will exec 'two'):\n");
+    kprint("Running at ring 3 (one and two exec each other; watch the frame count):\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

@@ -18,5 +18,11 @@ void vmm_map_page_in(uint64_t* root, uint64_t virt, uint64_t phys, uint64_t flag
 // own private user region.
 uint64_t* vmm_create_address_space();
 
+// Free a process address space created by vmm_create_address_space: releases
+// every user frame + page table under PML4[1..511] and the PML4 frame itself,
+// leaving the shared kernel mapping (PML4[0]) untouched. The space must NOT be
+// the active CR3 when this is called.
+void vmm_destroy_address_space(uint64_t* root);
+
 uint64_t* vmm_kernel_space();          // the kernel's PML4
 void      vmm_switch(uint64_t* root);  // load CR3

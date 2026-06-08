@@ -51,6 +51,42 @@ uint64_t* vmm_create_address_space() {
     return root;
 }
 
+// Free one page table's worth of children, bottom-up. (PT entries point at user
+// pages; PD/PDPT entries point at lower tables. We never see HUGE entries in the
+// user region, but skip them defensively rather than treat them as tables.)
+static void free_pt(uint64_t* pt) {
+    for (int i = 0; i < ENTRIES; i++)
+        if (pt[i] & PAGE_PRESENT)
+            pmm_free_frame((void*)(pt[i] & ADDR_MASK));
+}
+static void free_pd(uint64_t* pd) {
+    for (int i = 0; i < ENTRIES; i++) {
+        if (!(pd[i] & PAGE_PRESENT) || (pd[i] & HUGE_PAGE)) continue;
+        uint64_t* pt = (uint64_t*)(pd[i] & ADDR_MASK);
+        free_pt(pt);
+        pmm_free_frame((void*)(pd[i] & ADDR_MASK));
+    }
+}
+static void free_pdpt(uint64_t* pdpt) {
+    for (int i = 0; i < ENTRIES; i++) {
+        if (!(pdpt[i] & PAGE_PRESENT) || (pdpt[i] & HUGE_PAGE)) continue;
+        uint64_t* pd = (uint64_t*)(pdpt[i] & ADDR_MASK);
+        free_pd(pd);
+        pmm_free_frame((void*)(pdpt[i] & ADDR_MASK));
+    }
+}
+
+void vmm_destroy_address_space(uint64_t* root) {
+    if (!root || root == kernel_pml4) return;   // never tear down the kernel space
+    for (int i = 1; i < ENTRIES; i++) {         // skip [0]: shared kernel subtree
+        if (!(root[i] & PAGE_PRESENT)) continue;
+        uint64_t* pdpt = (uint64_t*)(root[i] & ADDR_MASK);
+        free_pdpt(pdpt);
+        pmm_free_frame((void*)(root[i] & ADDR_MASK));
+    }
+    pmm_free_frame((void*)root);                // the PML4 frame itself
+}
+
 uint64_t* vmm_kernel_space() { return kernel_pml4; }
 
 void vmm_switch(uint64_t* root) {

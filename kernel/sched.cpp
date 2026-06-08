@@ -6,6 +6,7 @@
 #include "elf.hpp"
 #include "ramdisk.hpp"
 #include "userspace.hpp"
+#include "serial.hpp"
 
 #define STACK_SIZE 16384
 
@@ -73,7 +74,15 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
 }
 
 uint64_t exec_current(const char* name) {
-    uint8_t* elf = ramdisk_lookup(name);
+    // Copy the name out of user memory now, while the caller's address space is
+    // still active. After the CR3 switch below, this same virtual address would
+    // read the *new* program's memory.
+    char nbuf[32];
+    int  ni = 0;
+    while (name[ni] && ni < 31) { nbuf[ni] = name[ni]; ni++; }
+    nbuf[ni] = 0;
+
+    uint8_t* elf = ramdisk_lookup(nbuf);
     if (!elf) return 0;
 
     // Load into a fresh address space. (elf bytes live in the kernel ramdisk,
@@ -89,8 +98,8 @@ uint64_t exec_current(const char* name) {
                         PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
     }
 
-    // Replace this task's address space. (The old user pages + page tables and
-    // the old PML4 leak for now -- freeing them is the next cleanup.)
+    // Replace this task's address space, remembering the old one to reclaim.
+    uint64_t* old_space = current->pml4;
     current->pml4 = space;
 
     // Fabricate a fresh ring-3 entry frame at the top of our kernel stack,
@@ -110,6 +119,16 @@ uint64_t exec_current(const char* name) {
     // The iretq in isr_common has no CR3 switch of its own, so activate the new
     // address space now. Kernel code + stack are in the shared PML4[0].
     vmm_switch(space);
+
+    // Old space is no longer the active CR3, so it's safe to reclaim its frames.
+    vmm_destroy_address_space(old_space);
+
+    kprint("  exec ");
+    kprint(nbuf);
+    kprint(": ");
+    kprint_uint((uint32_t)pmm_free_frame_count());
+    kprint(" frames free\n");
+
     return current->rsp;
 }
 

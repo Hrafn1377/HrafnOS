@@ -11,6 +11,7 @@ struct task {
     task_state state;
     uint64_t   wake_tick;
     uint64_t   kstack_top;
+    uint64_t   kstack_base;
     uint64_t*  pml4;        // this task's address space (loaded into CR3)
 };
 

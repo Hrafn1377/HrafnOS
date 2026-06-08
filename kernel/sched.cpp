@@ -20,6 +20,7 @@ void sched_init() {
     boot->state      = RUNNABLE;
     boot->wake_tick  = 0;
     boot->kstack_top = 0;
+    boot->kstack_base = 0;
     boot->pml4       = vmm_kernel_space();   // idle runs in the kernel space
     current = boot;
 }
@@ -43,6 +44,7 @@ task* task_create(void (*entry)()) {
     t->state      = RUNNABLE;
     t->wake_tick  = 0;
     t->kstack_top = stack_top;
+    t->kstack_base = stack;
     t->pml4       = vmm_kernel_space();
     t->next       = current->next;
     current->next = t;
@@ -68,6 +70,7 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
     t->state      = RUNNABLE;
     t->wake_tick  = 0;
     t->kstack_top = kstack_top;
+    t->kstack_base = kstack;
     t->pml4       = pml4;         // this process's private address space
     t->next       = current->next;
     current->next = t;
@@ -157,6 +160,7 @@ int fork_current(registers* parent) {
     t->state      = RUNNABLE;
     t->wake_tick  = 0;
     t->kstack_top = kstack_top;
+    t->kstack_base = kstack;
     t->pml4       = child_space;
     t->next       = current->next;
     current->next = t;
@@ -166,9 +170,35 @@ int fork_current(registers* parent) {
 
 void sched_tick() { g_ticks++; }
 
+// Reclaim tasks that have exited. Never touches `current` -- we're running on its
+// kernel stack and in its address space -- so a just-exited task (still current
+// when it died) is reaped on a later schedule, once some other task is current.
+static void reap_dead() {
+    task* prev = current;
+    task* t    = current->next;
+    while (t != current) {
+        if (t->state == DEAD) {
+            prev->next = t->next;       // unlink from the ring
+            task* dead = t;
+            t = t->next;
+            vmm_destroy_address_space(dead->pml4); // not the active CR3 (not current)
+            kfree((void*)dead->kstack_base);       // its kernel stack
+            kfree(dead);                           // its task struct
+            kprint(" reaped: ");
+            kprint_uint((uint32_t)pmm_free_frame_count());
+            kprint(" frames free\n");
+        } else {
+            prev = t;
+            t = t->next;
+        }
+    }
+}
+
+
 uint64_t schedule(uint64_t rsp) {
     if (!current) return rsp;
     current->rsp = rsp;
+    reap_dead();
 
     task* p = current;
     do {

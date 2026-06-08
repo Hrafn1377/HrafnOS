@@ -7,6 +7,7 @@
 #include "ramdisk.hpp"
 #include "userspace.hpp"
 #include "serial.hpp"
+#include "idt.hpp"
 
 #define STACK_SIZE 16384
 
@@ -130,6 +131,37 @@ uint64_t exec_current(const char* name) {
     kprint(" frames free\n");
 
     return current->rsp;
+}
+
+static uint64_t next_pid = 1;
+
+int fork_current(registers* parent) {
+    // Clone the parent's address space (deep copy of every user page).
+    uint64_t* child_space = vmm_clone_address_space(current->pml4);
+    if (!child_space) return -1;
+
+    // New task with its own kernel stack.
+    task*    t          = (task*)kmalloc(sizeof(task));
+    uint64_t kstack     = (uint64_t)kmalloc(STACK_SIZE);
+    uint64_t kstack_top = (kstack + STACK_SIZE) & ~15ULL;
+
+    // Drop a copy of the parent's syscall frame at the top of the child's kernel
+    // stack. When the scheduler resumes the child, isr_common pops this frame and
+    // iretq's back into the child's (cloned) user code at the same rip -- but with
+    // rax = 0, which is what fork() returns in the child.
+    registers* child_frame = (registers*)(kstack_top - sizeof(registers));
+    *child_frame = *parent;
+    child_frame->rax = 0;
+
+    t->rsp        = (uint64_t)child_frame;
+    t->state      = RUNNABLE;
+    t->wake_tick  = 0;
+    t->kstack_top = kstack_top;
+    t->pml4       = child_space;
+    t->next       = current->next;
+    current->next = t;
+
+    return (int)next_pid++;   // parent's fork() return value
 }
 
 void sched_tick() { g_ticks++; }

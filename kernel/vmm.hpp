@@ -24,5 +24,10 @@ uint64_t* vmm_create_address_space();
 // the active CR3 when this is called.
 void vmm_destroy_address_space(uint64_t* root);
 
+// Deep-copy a process address space: every mapped user page (PML4[1..511]) is
+// copied into a fresh frame in a new space that shares the kernel mapping
+// (PML4[0]). The mirror image of vmm_destroy_address_space.
+uint64_t* vmm_clone_address_space(uint64_t* src);
+
 uint64_t* vmm_kernel_space();          // the kernel's PML4
 void      vmm_switch(uint64_t* root);  // load CR3

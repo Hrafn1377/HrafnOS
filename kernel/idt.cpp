@@ -19,13 +19,6 @@ struct idt_ptr {
     uint64_t base;
 } __attribute__((packed));
 
-struct registers {
-    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
-    uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
-    uint64_t int_no;
-    uint64_t err_code;
-    uint64_t rip, cs, rflags, rsp, ss;
-} __attribute__((packed));
 
 static idt_entry idt[256];
 static idt_ptr   idtr;
@@ -118,6 +111,9 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 regs->rax = (uint64_t)-1;       // load failed; tell the caller
                 break;
             }
+            case SYS_FORK:
+                regs->rax = (uint64_t)fork_current(regs);        // child id to parent
+                break;                        // (child gets 0 in its own frame)
             case SYS_YIELD:
                 return schedule((uint64_t)regs);
             case SYS_EXIT:

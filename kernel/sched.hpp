@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+struct registers;      // defined in idt.hpp
+
 enum task_state { RUNNABLE, SLEEPING, DEAD };
 
 struct task {
@@ -20,6 +22,11 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top);
 // program and return the rsp to resume on (a fabricated ring-3 frame), or 0 on
 // failure. Intended to be called from the int 0x80 handler.
 uint64_t exec_current(const char* name);
+
+// Fork the current task: clone its address space and register frame into a new
+// RUNNABLE task that resumes from the same syscall with rax = 0. Returns the
+// child's id to the parent, or -1 on failure.
+int fork_current(registers* parent);
 
 void task_yield();
 void task_sleep(uint64_t ticks);

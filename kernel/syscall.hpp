@@ -7,3 +7,4 @@
 #define SYS_EXIT  2     // exit()               -> never returns
 #define SYS_READ  3     // read(fd, buf, len)   -> bytes read (non-blocking)
 #define SYS_EXEC  4     // exec(name)           -> -1 on failure, else never returns
+#define SYS_FORK  5     // fork()               -> child id in parent, 0 in child

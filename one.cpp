@@ -1,26 +1,32 @@
 extern "C" {
-static long sys_write(long fd, const char* buf, long len) {
-    long r;
-    asm volatile("int $0x80" : "=a"(r)
-                 : "a"(0L), "D"(fd), "S"(buf), "d"(len) : "memory");
-    return r;
-}
-static long sys_exec(const char* name) {
-    long r;
-    asm volatile("int $0x80" : "=a"(r) : "a"(4L), "D"(name) : "memory");
-    return r;   // returns only on failure
-}
-void _start() {
-    const char* msg = "[one]";
-    for (int k = 0; k < 3; k++) {
-        sys_write(1, msg, 5);
-        for (volatile long i = 0; i < 0x4000000; i++) { }
+    static long sys_write(long fd, const char* buf, long len) {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(0L), "D"(fd), "S"(buf), "d"(len) : "memory");
+        return r;
     }
-    sys_exec("two");                       // replace ourselves with "two"
-    const char* err = "[exec failed]";     // only reached if exec failed
-    for (;;) {
-        sys_write(1, err, 13);
-        for (volatile long i = 0; i < 0x4000000; i++) { }
+    static long sys_fork() {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(5L) : "memory");
+        return r;
     }
+    static void sys_exit() {
+        asm volatile("int $0x80" : : "a"(2L) : "memory");
+    }
+    void _start() {
+        long pid = sys_fork();
+        if (pid == 0) {
+            const char* c = "[child]";
+            for (int k = 0; k < 5; k++) {
+                sys_write(1, c, 7);
+                for (volatile long i = 0; i < 0x4000000; i++) { }
+            }
+        } else {
+            const char* p = "[parent]";
+            for (int k = 0; k < 5; k++) {
+                sys_write(1, p, 8);
+                for (volatile long i = 0; i < 0x4000000; i++) { }
+            }
+        }
+        sys_exit();
 }
 }

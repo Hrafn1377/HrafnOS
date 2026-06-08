@@ -87,6 +87,35 @@ void vmm_destroy_address_space(uint64_t* root) {
     pmm_free_frame((void*)root);                // the PML4 frame itself
 }
 
+uint64_t* vmm_clone_address_space(uint64_t* src) {
+    uint64_t* dst = vmm_create_address_space();       // shares kernel PNL4[0]
+
+    for (uint64_t i = 1; i < ENTRIES; i++) {          // skips [0]: shared kernel
+        if (!(src[i] & PAGE_PRESENT)) continue;
+        uint64_t* spdpt = (uint64_t*)(src[i] & ADDR_MASK);
+        for (uint64_t j = 0; j < ENTRIES; j++) {
+            if (!(spdpt[j] & PAGE_PRESENT) || (spdpt[j] & HUGE_PAGE)) continue;
+            uint64_t* spd = (uint64_t*)(spdpt[j] & ADDR_MASK);
+            for (uint64_t k = 0; k < ENTRIES; k++) {
+                if (!(spd[k] & PAGE_PRESENT) || (spd[k] & HUGE_PAGE)) continue;
+                uint64_t* spt = (uint64_t*)(spd[k] & ADDR_MASK);
+                for (uint64_t l = 0; l < ENTRIES; l++) {
+                    if (!(spt[l] & PAGE_PRESENT)) continue;
+
+                    uint64_t vaddr = (i << 39) | (j << 30) | (k << 21) | (l << 12);
+                    uint64_t flags = spt[l] & 0xFFF;           // PRESENT|WRITABLE|USER|...
+                    uint8_t* sframe = (uint8_t*)(spt[l] & ADDR_MASK);
+
+                    uint8_t* dframe = (uint8_t*)pmm_alloc_frame();
+                    for (int b = 0; b < 4096; b++) dframe[b] = sframe[b];
+                    vmm_map_page_in(dst, vaddr, (uint64_t)dframe, flags);
+                }
+            }
+        }
+    }
+    return dst;
+}
+
 uint64_t* vmm_kernel_space() { return kernel_pml4; }
 
 void vmm_switch(uint64_t* root) {

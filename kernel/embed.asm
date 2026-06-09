@@ -12,3 +12,9 @@ global prog_two_end
 prog_two_start:
     incbin "two.elf"
 prog_two_end:
+
+global prog_shell_start
+global prog_shell_end
+prog_shell_start:
+    incbin "shell.elf"
+prog_shell_end:

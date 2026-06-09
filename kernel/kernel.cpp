@@ -72,8 +72,8 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint_char('\n');
 
     sched_init();
-    spawn("one");
-    kprint("Running at ring 3 (one and two exec each other; watch the frame count):\n");
+    spawn("shell");
+    kprint("HrafnOS shell. Type a program name (one, two).\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

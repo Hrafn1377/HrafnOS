@@ -73,7 +73,7 @@ extern "C" void kmain(uint64_t mb_info) {
 
     sched_init();
     spawn("shell");
-    kprint("HrafnOS shell. Type a program name (one, two).\n");
+    kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 
     asm volatile("sti");
     while (true) asm volatile("hlt");

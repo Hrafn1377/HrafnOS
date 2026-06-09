@@ -18,8 +18,12 @@ two.elf: two.cpp user.ld
 	$(CXX) $(USER_CXXFLAGS) -T user.ld -o two.elf two.cpp
 shell.elf: shell.cpp user.ld
 	$(CXX) $(USER_CXXFLAGS) -T user.ld -o shell.elf shell.cpp
+help.elf: help.cpp user.ld
+	$(CXX) $(USER_CXXFLAGS) -T user.ld -o help.elf help.cpp
+clear.elf: clear.cpp user.ld
+	$(CXX) $(USER_CXXFLAGS) -T user.ld -o clear.elf clear.cpp
 
-kernel/embed.o: kernel/embed.asm one.elf two.elf shell.elf
+kernel/embed.o: kernel/embed.asm one.elf two.elf shell.elf help.elf clear.elf
 	$(ASM) -f elf64 kernel/embed.asm -o kernel/embed.o
 
 # ---- kernel ----
@@ -71,4 +75,4 @@ run: iso
 		-serial mon:stdio
 
 clean:
-	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso one.elf two.elf shell.elf
+	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso one.elf two.elf shell.elf help.elf clear.elf

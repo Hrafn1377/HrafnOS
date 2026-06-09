@@ -18,3 +18,15 @@ global prog_shell_end
 prog_shell_start:
     incbin "shell.elf"
 prog_shell_end:
+
+global prog_help_start
+global prog_help_end
+prog_help_start:
+    incbin "help.elf"
+prog_help_end:
+
+global prog_clear_start
+global prog_clear_end
+prog_clear_start:
+    incbin "clear.elf"
+prog_clear_end:

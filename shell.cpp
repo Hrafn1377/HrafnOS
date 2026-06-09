@@ -16,9 +16,9 @@ extern "C" {
         asm volatile("int $0x80" : "=a"(r) : "a"(5L) : "memory");
         return r;
     }
-    static long sys_exec(const char* name) {
+    static long sys_exec(char** argv, long argc) {
         long r;
-        asm volatile("int $0x80" : "=a"(r) : "a"(4L), "D"(name) : "memory");
+        asm volatile("int $0x80" : "=a"(r) : "a"(4L), "D"(argv), "S"(argc) : "memory");
         return r;
     }
     static void sys_yield() { asm volatile("int $0x80" : : "a"(1L) : "memory"); }
@@ -48,15 +48,28 @@ extern "C" {
                 if (n < 63) line[n++] = ch;
             }
             line[n] = 0;
-            if (n == 0) continue;        // empty line
+            if (n == 0) continue;          // empty line
+
+            //Split the line into words: argv[0] is the command, the rest are args.
+            char* argv[16];
+            int   argc = 0;
+            int   p = 0;
+            while (line[p] && argc < 16) {
+                while (line[p] == ' ') p++;         // skip spaces
+                if (!line[p]) break;
+                argv[argc++] = &line[p];            // start of a word
+                while (line[p] && line[p] != ' ') p++;
+                if (line[p] == ' ') line[p++] = 0;   // terminates the word
+            }
+            if (argc == 0) continue;
 
             long pid = sys_fork();
             if (pid == 0) {
-                sys_exec(line);          // child becomes the command
-                puts("?\n");             // exec returned -> unknown command
+                sys_exec(argv, argc);              // child becomes the command
+                puts("?\n");                       // exec returned -> unknown command
                 sys_exit();
             }
-            sys_wait();           // parent: block until the command finished, then re-prompt
+            sys_wait();                           // parent: block until the command finishes, then re-prompt
         }
 }
 }

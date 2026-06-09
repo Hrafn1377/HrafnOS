@@ -13,8 +13,13 @@ static void puts(const char* s) {
     sys_write(1, s, n);
 }
 
-void _start() {
-    puts("commands: one two echo help clear\n");
+// echo: print argv[1..] separated by spaces, then a newline.
+void _start(int argc, char** argv) {
+    for (int i = 1; i < argc; i++) {
+        puts(argv[i]);
+        if (i + 1 < argc) sys_write(1, " ", 1);
+    }
+    sys_write(1, "\n", 1);
     sys_exit();
 }
 }

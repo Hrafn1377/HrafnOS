@@ -10,6 +10,8 @@ extern "C" uint8_t prog_help_start[];
 extern "C" uint8_t prog_help_end[];
 extern "C" uint8_t prog_clear_start[];
 extern "C" uint8_t prog_clear_end[];
+extern "C" uint8_t prog_echo_start[];
+extern "C" uint8_t prog_echo_end[];
  
 static ramdisk_entry entries[] = {
     { "one", prog_one_start, prog_one_end },
@@ -17,6 +19,7 @@ static ramdisk_entry entries[] = {
     { "shell", prog_shell_start, prog_shell_end },
     { "help", prog_help_start, prog_help_end },
     { "clear", prog_clear_start, prog_clear_end },
+    { "echo", prog_echo_start, prog_echo_end },
 };
 static const uint32_t N = sizeof(entries) / sizeof(entries[0]);
 

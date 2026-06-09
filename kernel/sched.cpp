@@ -10,6 +10,8 @@
 #include "idt.hpp"
 
 #define STACK_SIZE 16384
+#define MAX_ARGS   16
+#define MAX_ARG_LEN 64  
 
 static task*             current = nullptr;
 static volatile uint64_t g_ticks = 0;
@@ -80,20 +82,23 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
     return t;
 }
 
-uint64_t exec_current(const char* name) {
-    // Copy the name out of user memory now, while the caller's address space is
-    // still active. After the CR3 switch below, this same virtual address would
-    // read the *new* program's memory.
-    char nbuf[32];
-    int  ni = 0;
-    while (name[ni] && ni < 31) { nbuf[ni] = name[ni]; ni++; }
-    nbuf[ni] = 0;
+uint64_t exec_current(char** argv, int argc) {
+    // Copy argv out of user memory now, while the caller's address space is still
+    // active. After the CR3 switch below, those user addresses point at the new
+    // program's memory -- so we stash everything kernel-side first.
+    static char argbuf[MAX_ARGS][MAX_ARG_LEN];
+    if (argc < 0)        argc = 0;
+    if (argc > MAX_ARGS) argc = MAX_ARGS;
+    for (int i = 0; i < argc; i++) {
+        const char* src = argv[i];
+        int j = 0;
+        while (src[j] && j < MAX_ARG_LEN - 1) { argbuf[i][j] = src[j]; j++; }
+        argbuf[i][j] = 0;
+    }
 
-    uint8_t* elf = ramdisk_lookup(nbuf);
+    uint8_t* elf = ramdisk_lookup(argbuf[0]);   // argv[0] is the program name
     if (!elf) return 0;
 
-    // Load into a fresh address space. (elf bytes live in the kernel ramdisk,
-    // and `name` is read here while the caller's address space is still active.)
     uint64_t  entry = 0;
     uint64_t* space = elf_load(elf, &entry);
     if (!space) return 0;
@@ -109,23 +114,39 @@ uint64_t exec_current(const char* name) {
     uint64_t* old_space = current->pml4;
     current->pml4 = space;
 
-    // Fabricate a fresh ring-3 entry frame at the top of our kernel stack,
-    // exactly where the original syscall frame sat. This sits above the live
-    // isr_handler stack usage, so nothing in flight is clobbered.
-    uint64_t* sp = (uint64_t*)current->kstack_top;
-    *--sp = 0x23;                 // ss  = user data | RPL 3
-    *--sp = USER_STACK_TOP;       // rsp = user stack
-    *--sp = 0x202;                // rflags (IF=1)
-    *--sp = 0x1B;                 // cs  = user code | RPL 3
-    *--sp = entry;                // rip = new entry point
-    *--sp = 0;                    // err_code
-    *--sp = 0;                    // int_no
-    for (int i = 0; i < 15; i++) *--sp = 0;
-    current->rsp = (uint64_t)sp;
-
-    // The iretq in isr_common has no CR3 switch of its own, so activate the new
-    // address space now. Kernel code + stack are in the shared PML4[0].
+    // Activate the new space so we can write the argv block onto its user stack.
     vmm_switch(space);
+
+    // Lay out argv on the new stack: strings from the top down, then a
+    // NULL-terminated pointer array, then a 16-aligned entry rsp below it.
+    uint64_t sp = USER_STACK_TOP;
+    char* uarg[MAX_ARGS];
+    for (int i = argc - 1; i >= 0; i--) {
+        int len = 0;
+        while (argbuf[i][len]) len++;
+        len++;                                  // include the NUL
+        sp -= (uint64_t)len;
+        for (int b = 0; b < len; b++) ((char*)sp)[b] = argbuf[i][b];
+        uarg[i] = (char*)sp;
+    }
+    sp &= ~0xFULL;
+    sp -= (uint64_t)(argc + 1) * 8;             // argc pointers + a NULL terminator
+    char** uargv = (char**)sp;
+    for (int i = 0; i < argc; i++) uargv[i] = uarg[i];
+    uargv[argc] = nullptr;
+    sp &= ~0xFULL;                              // 16-align the entry rsp
+
+    // Fabricate a fresh ring-3 entry frame, passing argc/argv in rdi/rsi.
+    registers* frame = (registers*)(current->kstack_top - sizeof(registers));
+    for (uint64_t i = 0; i < sizeof(registers) / 8; i++) ((uint64_t*)frame)[i] = 0;
+    frame->rip    = entry;
+    frame->cs     = 0x1B;                       // user code | RPL 3
+    frame->rflags = 0x202;                      // IF = 1
+    frame->rsp    = sp;
+    frame->ss     = 0x23;                       // user data | RPL 3
+    frame->rdi    = (uint64_t)argc;             // _start(int argc, ...)
+    frame->rsi    = (uint64_t)uargv;            // _start(..., char** argv)
+    current->rsp  = (uint64_t)frame;
 
     // Old space is no longer the active CR3, so it's safe to reclaim its frames.
     vmm_destroy_address_space(old_space);

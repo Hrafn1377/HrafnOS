@@ -30,3 +30,9 @@ global prog_clear_end
 prog_clear_start:
     incbin "clear.elf"
 prog_clear_end:
+
+global prog_echo_start
+global prog_echo_end
+prog_echo_start:
+    incbin "echo.elf"
+prog_echo_end:

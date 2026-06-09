@@ -106,7 +106,7 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 break;
             }
             case SYS_EXEC: {
-                uint64_t new_rsp = exec_current((const char*)regs->rdi);
+                uint64_t new_rsp = exec_current((char**)regs->rdi, (int)regs->rsi);
                 if (new_rsp) return new_rsp;   // resume in the new program
                 regs->rax = (uint64_t)-1;       // load failed; tell the caller
                 break;

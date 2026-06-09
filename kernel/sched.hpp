@@ -3,16 +3,18 @@
 
 struct registers;      // defined in idt.hpp
 
-enum task_state { RUNNABLE, SLEEPING, DEAD };
+enum task_state { RUNNABLE, SLEEPING, WAITING, DEAD };
 
 struct task {
     uint64_t   rsp;
     task*      next;
+    task*      parent;
     task_state state;
     uint64_t   wake_tick;
     uint64_t   kstack_top;
     uint64_t   kstack_base;
     uint64_t*  pml4;        // this task's address space (loaded into CR3)
+
 };
 
 void  sched_init();
@@ -28,6 +30,10 @@ uint64_t exec_current(const char* name);
 // RUNNABLE task that resumes from the same syscall with rax = 0. Returns the
 // child's id to the parent, or -1 on failure.
 int fork_current(registers* parent);
+
+// Block the current task until one of its children exits (is reaped). Returns
+// the rsp to resume on. If it has no live children, returns immediately.
+uint64_t wait_current(uint64_t rsp);
 
 void task_yield();
 void task_sleep(uint64_t ticks);

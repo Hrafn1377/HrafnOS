@@ -22,6 +22,7 @@ extern "C" {
         return r;
     }
     static void sys_yield() { asm volatile("int $0x80" : : "a"(1L) : "memory"); }
+    static void sys_wait()  { asm volatile("int $0x80" : : "a"(6L) : "memory"); }
     static void sys_exit()  { asm volatile("int $0x80" : : "a"(2L) : "memory"); }
 
     static void puts(const char* s) {
@@ -55,7 +56,7 @@ extern "C" {
                 puts("?\n");             // exec returned -> unknown command
                 sys_exit();
             }
-            // parent (the shell): Stage 1 re-prompts immediately (wait comes in Stage 2)
+            sys_wait();           // parent: block until the command finished, then re-prompt
         }
 }
 }

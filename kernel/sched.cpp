@@ -22,6 +22,7 @@ void sched_init() {
     boot->kstack_top = 0;
     boot->kstack_base = 0;
     boot->pml4       = vmm_kernel_space();   // idle runs in the kernel space
+    boot->parent     = nullptr;
     current = boot;
 }
 
@@ -46,6 +47,7 @@ task* task_create(void (*entry)()) {
     t->kstack_top = stack_top;
     t->kstack_base = stack;
     t->pml4       = vmm_kernel_space();
+    t->parent     = nullptr;
     t->next       = current->next;
     current->next = t;
     return t;
@@ -72,6 +74,7 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
     t->kstack_top = kstack_top;
     t->kstack_base = kstack;
     t->pml4       = pml4;         // this process's private address space
+    t->parent     = nullptr;     // spawned by the kernel, no parent
     t->next       = current->next;
     current->next = t;
     return t;
@@ -126,13 +129,6 @@ uint64_t exec_current(const char* name) {
 
     // Old space is no longer the active CR3, so it's safe to reclaim its frames.
     vmm_destroy_address_space(old_space);
-
-    kprint("  exec ");
-    kprint(nbuf);
-    kprint(": ");
-    kprint_uint((uint32_t)pmm_free_frame_count());
-    kprint(" frames free\n");
-
     return current->rsp;
 }
 
@@ -162,10 +158,29 @@ int fork_current(registers* parent) {
     t->kstack_top = kstack_top;
     t->kstack_base = kstack;
     t->pml4       = child_space;
+    t->parent     = current;       // for wait()
     t->next       = current->next;
     current->next = t;
 
     return (int)next_pid++;   // parent's fork() return value
+}
+
+uint64_t wait_current(uint64_t rsp) {
+    current->rsp = rsp;
+
+    // Any still-running child to wait for?
+    bool  live = false;
+    task* t    = current->next;
+    while (t != current) {
+        if (t->parent == current && t->state != DEAD) { live = true; break; }
+        t = t->next;
+    }
+
+    ((registers*)rsp)->rax = 0;          // wait() returns 0
+
+    if (!live) return rsp;               // nothing to wait for; return immediately
+    current->state = WAITING;            // park until the reaper wakes us
+    return schedule(rsp);
 }
 
 void sched_tick() { g_ticks++; }
@@ -181,12 +196,11 @@ static void reap_dead() {
             prev->next = t->next;       // unlink from the ring
             task* dead = t;
             t = t->next;
+            if (dead->parent && dead->parent->state == WAITING)
+                dead->parent->state = RUNNABLE;     // wake a parent blocked in wait()
             vmm_destroy_address_space(dead->pml4); // not the active CR3 (not current)
             kfree((void*)dead->kstack_base);       // its kernel stack
             kfree(dead);                           // its task struct
-            kprint(" reaped: ");
-            kprint_uint((uint32_t)pmm_free_frame_count());
-            kprint(" frames free\n");
         } else {
             prev = t;
             t = t->next;

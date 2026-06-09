@@ -114,6 +114,8 @@ extern "C" uint64_t isr_handler(registers* regs) {
             case SYS_FORK:
                 regs->rax = (uint64_t)fork_current(regs);        // child id to parent
                 break;                        // (child gets 0 in its own frame)
+            case SYS_WAIT:
+                return wait_current((uint64_t)regs);
             case SYS_YIELD:
                 return schedule((uint64_t)regs);
             case SYS_EXIT:

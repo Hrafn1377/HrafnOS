@@ -72,7 +72,7 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint_char('\n');
 
     sched_init();
-    spawn("shell");
+    spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 
     asm volatile("sti");

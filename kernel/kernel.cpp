@@ -9,6 +9,7 @@
 #include "elf.hpp"
 #include "ramdisk.hpp"
 #include "userspace.hpp"
+#include "fb.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -59,6 +60,15 @@ extern "C" void kmain(uint64_t mb_info) {
     vmm_init();
     heap_init();
     kprint("Heap ready.\n");
+
+    // Bring up the framebuffer and draw a test pattern.
+    if (fb_init(mb_info)) {
+        fb_fill(0x00202840);
+        for (uint32_t y = 0; y < 160; y++)
+            for (uint32_t x = 0; x < 320; x++)
+                fb_putpixel(60 + x, 60 + y, 0x00FFA500);
+        kprint("fb: test pattern drawn\n");
+    }
 
     kprint("ramdisk: ");
     for (uint32_t i = 0; i < ramdisk_count(); i++) {

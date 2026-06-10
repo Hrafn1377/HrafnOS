@@ -1,4 +1,4 @@
-OVMF = /tmp/OVMF.fd
+OVMF = /opt/homebrew/share/qemu/edk2-x86_64-code.fd
 CXX = x86_64-elf-g++
 ASM = nasm
 # -mgeneral-regs-only: interrupt handlers return to interrupted code, so
@@ -55,10 +55,12 @@ kernel/sched.o: kernel/sched.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/sched.cpp -o kernel/sched.o
 kernel/elf.o: kernel/elf.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/elf.cpp -o kernel/elf.o
+kernel/fb.o: kernel/fb.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/fb.cpp -o kernel/fb.o
 kernel/ramdisk.o: kernel/ramdisk.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/ramdisk.cpp -o kernel/ramdisk.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/ramdisk.o kernel/embed.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/ramdisk.o kernel/embed.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)
@@ -69,11 +71,10 @@ iso: iso/boot/hrafnos.bin
 run: iso
 	qemu-system-x86_64 \
 		-machine q35 \
-		-bios $(OVMF) \
+		-drive if=pflash,format=raw,readonly=on,file=$(OVMF) \
 		-cdrom hrafnos.iso \
 		-boot d \
 		-no-reboot \
-		-nographic \
 		-serial mon:stdio
 
 clean:

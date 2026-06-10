@@ -15,6 +15,17 @@ header_start:
     dd 0                                       ; architecture: 0 = i386 (32-bit)
     dd header_end - header_start               ; header length
     dd -(0xE85250D6 + 0 + (header_end - header_start))  ; checksum
+
+    ; framebuffer request tag (ask GRUB for a linear RGB framebuffer)
+    align 8
+    dw 5                                       ; type = framebuffer
+    dw 0                                       ; flags (0 = required)
+    dd 20                                      ; size
+    dd 1024                                    ; preferred width
+    dd 768                                     ; preferred height
+    dd 32                                      ; preferred bpp
+
+    align 8
     dw 0                                       ; end tag: type
     dw 0                                       ; end tag: flags
     dd 8                                       ; end tag: size

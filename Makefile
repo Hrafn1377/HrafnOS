@@ -57,10 +57,14 @@ kernel/elf.o: kernel/elf.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/elf.cpp -o kernel/elf.o
 kernel/fb.o: kernel/fb.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/fb.cpp -o kernel/fb.o
+kernel/console.o: kernel/console.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/console.cpp -o kernel/console.o
+kernel/font.o: kernel/font.cpp
+	$(CXX) $(CXXFLAGS) -c kernel/font.cpp -o kernel/font.o
 kernel/ramdisk.o: kernel/ramdisk.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/ramdisk.cpp -o kernel/ramdisk.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/ramdisk.o kernel/embed.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/console.o kernel/font.o kernel/ramdisk.o kernel/embed.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)

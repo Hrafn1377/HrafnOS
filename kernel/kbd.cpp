@@ -37,3 +37,23 @@ char kbd_handle_scancode(uint8_t sc) {
     // Normal key: pick from the shifted or unshifted table.
     return g_shift ? map_upper[sc] : map_lower[sc];
 }
+
+// --- input ring buffer (signle producer: IRQ1, single consumer: SYS_READ) ---
+#define KBD_BUF_SIZE 128
+static volatile char            kbd_buf[KBD_BUF_SIZE];
+static volatile uint32_t kbd_head = 0;       // next write slot
+static volatile uint32_t kbd_tail = 0;       // next read slot
+
+void kbd_buffer_push(char c) {
+    uint32_t next = (kbd_head + 1) % KBD_BUF_SIZE;
+    if (next == kbd_tail) return;        // buffer full: drop the char
+    kbd_buf[kbd_head] = c;
+    kbd_head = next;
+}
+
+int kbd_getchar() {
+    if (kbd_tail == kbd_head) return -1; // empty
+    char c = kbd_buf[kbd_tail];
+    kbd_tail = (kbd_tail + 1) % KBD_BUF_SIZE;
+    return (int)(unsigned char)c;
+}

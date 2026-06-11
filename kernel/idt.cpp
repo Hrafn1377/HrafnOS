@@ -81,7 +81,8 @@ extern "C" uint64_t isr_handler(registers* regs) {
         if (irq == 1) {                       // keyboard
             uint8_t sc = inb(0x60);           // read scancode (also drains the controller)
             char c = kbd_handle_scancode(sc);
-            if (c >= ' ' || c == '\n') kprint_char(c);   // 4b: echo printable chars
+            if (c >= ' ' || c == '\n')        // buffer printable chars + newline
+                kbd_buffer_push(c);            // the shell reads + echoes it
             pic_send_eoi(1);
             return (uint64_t)regs;
         }
@@ -107,7 +108,8 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 uint64_t len = regs->rdx;
                 uint64_t n   = 0;
                 while (n < len) {
-                    int c = serial_getchar();
+                    int c = kbd_getchar();             // keyboard first
+                    if (c < 0) c = serial_getchar();   // then serial fallback
                     if (c < 0) break;
                     buf[n++] = (char)c;
                 }

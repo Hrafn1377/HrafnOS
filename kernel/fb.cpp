@@ -86,3 +86,22 @@ void fb_putpixel(uint32_t x, uint32_t y, uint32_t color) {
     if (!g_fb || x>= g_width || y >= g_height) return;
     *(volatile uint32_t*)(g_fb + (uint64_t)y * g_pitch + (uint64_t)x * 4) = color;
 }
+
+void fb_scroll_up(uint32_t lines, uint32_t color) {
+    if (!g_fb || lines == 0) return;
+    if (lines >= g_height) { fb_fill(color); return; }
+
+    // Move the region below `lines` up to the top, 64 bits at a time.
+    uint64_t shift = (uint64_t)lines * g_pitch;         // bytes to drop
+    uint64_t total = (uint64_t)g_height * g_pitch;      // whole screen
+    volatile uint64_t* dst = (volatile uint64_t*)g_fb;
+    volatile uint64_t* src = (volatile uint64_t*)(g_fb + shift);
+    uint64_t words = (total - shift) / 8;
+    for (uint64_t i = 0; i < words; i++) dst[i] = src[i];
+
+    // Clear the freed bottom `lines` scanlines to the fill color.
+    for (uint32_t y = g_height - lines; y < g_height; y++) {
+       volatile uint32_t* row = (volatile uint32_t*)(g_fb + (uint64_t)y * g_pitch);
+       for (uint32_t x = 0; x < g_width; x++) row[x] = color; 
+    }
+}

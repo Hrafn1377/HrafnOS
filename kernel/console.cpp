@@ -33,8 +33,12 @@ static void draw_glyph(uint8_t c, uint32_t col, uint32_t row) {
 
 static void newline() {
     g_col = 0;
-    g_row++;
-    if (g_row >= g_rows) g_row = g_rows - 1;     // scroll comes in step 2b
+   if (g_row + 1 >= g_rows) {
+    fb_scroll_up(FONT_H, g_bg);       // at the bottom: shift up one text line
+    // cursor stays on the last row
+   } else {
+        g_row++;
+   }
 }
 
 void console_putchar(char c) {

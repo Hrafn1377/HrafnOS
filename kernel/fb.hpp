@@ -11,6 +11,9 @@ void fb_fill(uint32_t color);
 // Plot a single pixel (bounds-checked).
 void fb_putpixel(uint32_t x, uint32_t y, uint32_t color);
 
+// Shift the framebuffer up by `lines` scanlines; fill the freed bottom
+// region with `color`. Used by the console to scroll.
+void fb_scroll_up(uint32_t lines, uint32_t color);
 uint32_t fb_width();
 uint32_t fb_height();
 bool     fb_ready();

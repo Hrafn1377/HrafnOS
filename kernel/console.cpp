@@ -8,6 +8,7 @@ static uint32_t g_col  = 0;            // cursor column
 static uint32_t g_row  = 0;            // sursor row
 static uint32_t g_fg   = 0x00FFFFFF;   // foreground (white)
 static uint32_t g_bg   = 0x00202840;   // background (dark slate)
+static bool     g_ready = false;       // set once console_init() has run
 
 void console_init() {
     g_cols = fb_width()   / FONT_W;
@@ -15,7 +16,10 @@ void console_init() {
     g_col  = 0;
     g_row  = 0;
     fb_fill(g_bg);
+    g_ready = true;
 }
+
+bool console_ready() { return g_ready; }
 
 // Paint the glyph for c into character cell (col, row).
 static void draw_glyph(uint8_t c, uint32_t col, uint32_t row) {

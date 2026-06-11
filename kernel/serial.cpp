@@ -1,4 +1,5 @@
 #include "serial.hpp"
+#include "console.hpp"
 
 static inline void outb(uint16_t port, uint8_t val) {
     asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -23,6 +24,7 @@ void serial_init() {
 void kprint_char(char c) {
     while (!(inb(0x3FD) & 0x20)) { }   // wait for transmit holding reg empty
     outb(0x3F8, c);
+    if (console_ready()) console_putchar(c);       // mirror to the screen once it's up
 }
 
 void kprint(const char* str) {

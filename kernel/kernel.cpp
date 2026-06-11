@@ -64,16 +64,9 @@ extern "C" void kmain(uint64_t mb_info) {
     // Bring up the framebuffer and draw a test pattern to prove we own the screen
     if (fb_init(mb_info)) {
         console_init();
-        console_write("HrafnOS console online. Scrolling test:\n");
-        for (int i = 0; i < 60; i++) {
-            char line[12] = { 'l','i','n','e',' ',
-                              (char)('0' + (i / 10) % 10),
-                              (char)('0' + i % 10),
-                              '\n', 0 };
-            console_write(line);
-        }
-        kprint("fb: scroll test done\n");
+        kprint("HrafnOS console ready.\n");
     }
+    
     kprint("ramdisk: ");
     for (uint32_t i = 0; i < ramdisk_count(); i++) {
         const ramdisk_entry* e = ramdisk_get(i);

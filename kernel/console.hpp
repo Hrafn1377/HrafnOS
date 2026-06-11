@@ -10,3 +10,6 @@ void console_putchar(char c);
 
 // Write a NUL-terminated string.
 void console_write(const char* s);
+
+// True once console_init() has run; lets kprint mirror to the screen
+bool console_ready();

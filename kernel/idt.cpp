@@ -4,6 +4,7 @@
 #include "sched.hpp"
 #include "syscall.hpp"
 #include "io.hpp"
+#include "kbd.hpp"
 
 struct idt_entry {
     uint16_t offset_low;
@@ -77,11 +78,10 @@ extern "C" uint64_t isr_handler(registers* regs) {
             sched_tick();
             return schedule((uint64_t)regs);
         }
-        if (irq == 1) {                           // keyboard
-            uint8_t sc = inb(0x60);               // read scancode (also drains the controller)
-            kprint("kbd: ");
-            kprint_hex(sc);
-            kprint_char('\n');
+        if (irq == 1) {                       // keyboard
+            uint8_t sc = inb(0x60);           // read scancode (also drains the controller)
+            char c = kbd_handle_scancode(sc);
+            if (c >= ' ' || c == '\n') kprint_char(c);   // 4b: echo printable chars
             pic_send_eoi(1);
             return (uint64_t)regs;
         }

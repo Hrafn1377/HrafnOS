@@ -29,7 +29,7 @@ void pic_remap() {
     outb(PIC2_DATA, 0x01); io_wait();
 
     // Masks: unmask only IRQ0 (timer) on the master; mask everything else.
-    outb(PIC1_DATA, 0xFE);   // 1111 1110 -> IRQ0 enabled
+    outb(PIC1_DATA, 0xFC);   // 1111 1110 -> IRQ0 (timer) + IRQ1 (keyboard)
     outb(PIC2_DATA, 0xFF);   // all slave lines masked
 }
 

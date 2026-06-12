@@ -48,6 +48,8 @@ static void newline() {
 void console_putchar(char c) {
     if (c == '\n') { newline(); return; }
     if (c == '\r') { g_col = 0; return; }
+    if (c == '\b') { if (g_col > 0) g_col--; return; }   // dumb cursor-left; the 
+                                                         // following space erases
     draw_glyph((uint8_t)c, g_col, g_row);
     if (++g_col >= g_cols) newline();
 }

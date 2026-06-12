@@ -44,6 +44,10 @@ extern "C" {
                 long r = sys_read(0, &ch, 1);
                 if (r <= 0) { sys_yield(); continue; }
                 if (ch == '\r' || ch == '\n') { sys_write(1, "\n", 1); break; }
+                if (ch == '\b') {                  // backspace
+                    if (n > 0) { n--; sys_write(1, "\b \b", 3); }     //erase last char
+                    continue;                         // (ignored at column 0: guards prompt)
+                }
                 sys_write(1, &ch, 1);            // echo
                 if (n < 63) line[n++] = ch;
             }

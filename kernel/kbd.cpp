@@ -32,10 +32,11 @@ char kbd_handle_scancode(uint8_t sc) {
         if (code == 0x2A || code == 0x36) g_shift = false;   // shift released
         return 0;
     }
-    // Shift pressed: update state, emit no character.
     if (sc == 0x2A || sc == 0x36) { g_shift = true; return 0; }
-    // Normal key: pick from the shifted or unshifted table.
-    return g_shift ? map_upper[sc] : map_lower[sc];
+
+    char c = g_shift ? map_upper[sc] : map_lower[sc];
+    if (c == 0x7F) c = '\b';   // some keyboards send DEL for Backspace; normalize
+    return c;
 }
 
 // --- input ring buffer (signle producer: IRQ1, single consumer: SYS_READ) ---

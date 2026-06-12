@@ -79,17 +79,14 @@ extern "C" uint64_t isr_handler(registers* regs) {
             return schedule((uint64_t)regs);
         }
         if (irq == 1) {                       // keyboard
-            uint8_t sc = inb(0x60);           // read scancode (also drains the controller)
+            uint8_t sc = inb(0x60);
             char c = kbd_handle_scancode(sc);
-            if (c >= ' ' || c == '\n')        // buffer printable chars + newline
-                kbd_buffer_push(c);            // the shell reads + echoes it
+            if (c >= ' ' || c == '\n' || c == '\b')
+                kbd_buffer_push(c);
             pic_send_eoi(1);
             return (uint64_t)regs;
         }
-        pic_send_eoi(irq);
-        return (uint64_t)regs;
     }
-
     if (regs->int_no == 48) {                   // software yield (int $0x30)
         return schedule((uint64_t)regs);
     }

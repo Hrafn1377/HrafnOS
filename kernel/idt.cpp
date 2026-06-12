@@ -81,8 +81,7 @@ extern "C" uint64_t isr_handler(registers* regs) {
         if (irq == 1) {                       // keyboard
             uint8_t sc = inb(0x60);
             char c = kbd_handle_scancode(sc);
-            
-            if (c >= ' ' || c == '\n' || c == '\b')
+            if (c >= ' ' || c == '\n' || c == '\b' || c == '\t')  // printable + newline + bksp + tab 
                 kbd_buffer_push(c);
             pic_send_eoi(1);
             return (uint64_t)regs;

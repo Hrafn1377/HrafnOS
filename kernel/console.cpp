@@ -76,6 +76,15 @@ void console_putchar(char c) {
     if (c == '\n') { newline(); return; }
     if (c == '\r') { g_col = 0; return; }
     if (c == '\b') { if (g_col > 0) g_col--; return; }
+    if (c == '\t') {                                  // tab: next 8-column stop
+        uint32_t next = (g_col + 8) & ~7u;             // round up to multiple of 8
+        while (g_col < next && g_col < g_cols) {
+            draw_glyph(' ', g_col, g_row);             // fill with spaces so it erases cleanly
+            g_col++;
+        }
+        if (g_col >= g_cols) newline();
+        return;
+    }
     draw_glyph((uint8_t)c, g_col, g_row);
     if (++g_col >= g_cols) newline();
 }

@@ -81,6 +81,7 @@ extern "C" uint64_t isr_handler(registers* regs) {
         if (irq == 1) {                       // keyboard
             uint8_t sc = inb(0x60);
             char c = kbd_handle_scancode(sc);
+            
             if (c >= ' ' || c == '\n' || c == '\b')
                 kbd_buffer_push(c);
             pic_send_eoi(1);
@@ -108,6 +109,7 @@ extern "C" uint64_t isr_handler(registers* regs) {
                     int c = kbd_getchar();             // keyboard first
                     if (c < 0) c = serial_getchar();   // then serial fallback
                     if (c < 0) break;
+                    if (c == 0x7F) c = '\b';          // DEL -> BS (serial terminals send DEL)
                     buf[n++] = (char)c;
                 }
                 regs->rax = n;

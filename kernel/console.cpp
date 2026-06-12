@@ -45,11 +45,37 @@ static void newline() {
    }
 }
 
+// Minimal ANSI escape handling: just enough for \033[2J (clear) and \033[H (home).
+enum ConsoleState { ST_NORMAL, ST_ESC, ST_CSI };
+static ConsoleState g_state = ST_NORMAL;
+static uint32_t g_param        = 0;
+static bool     g_have_param = false;
+
+static void console_clear() {
+    fb_fill(g_bg);
+    g_col = 0;
+    g_row = 0;
+}
+
 void console_putchar(char c) {
+    // --- ANSI escape state machine (clear-screen + cursor-home) ---
+    if (g_state == ST_ESC) {
+        if (c == '[') { g_state = ST_CSI; g_param = 0; g_have_param = false; }
+        else          { g_state = ST_NORMAL; }
+        return;
+    }
+    if (g_state == ST_CSI) {
+        if (c >= '0' && c <= '9') { g_param = g_param * 10 + (uint32_t)(c - '0'); g_have_param = true; return; }
+        if (c == 'J') { if (!g_have_param || g_param == 2) console_clear(); }
+        else if (c == 'H') { g_col = 0; g_row = 0; }
+        g_state = ST_NORMAL;        // any other final byte: ignore
+        return;
+    }
+    if (c == '\033') { g_state = ST_ESC; return; }
+
     if (c == '\n') { newline(); return; }
     if (c == '\r') { g_col = 0; return; }
-    if (c == '\b') { if (g_col > 0) g_col--; return; }   // dumb cursor-left; the 
-                                                         // following space erases
+    if (c == '\b') { if (g_col > 0) g_col--; return; }
     draw_glyph((uint8_t)c, g_col, g_row);
     if (++g_col >= g_cols) newline();
 }

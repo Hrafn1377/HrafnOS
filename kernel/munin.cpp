@@ -392,3 +392,43 @@ int munin_dirent(int dir, int index, char* name_out, uint32_t cap) {
     }
     return 0;      // index past end
 }
+
+// Remove the file or empty directory at `path`: drop its dirent from the parent,
+// free its data blocks, and release its inode. Refuses to remove a non-empty
+// directory or the root. Returns 0 on success, -1 on error.
+int munin_unlink(const char* path) {
+    if (!path || path[0] != '/') return -1;
+    int len = str_len(path);
+    while (len > 1 && path[len - 1] == '/') len--;      // strip trailing '/'
+    if (len <= 1) return -1;                            // can't unlink root
+
+    int slash = 0;
+    for (int i = 0; i < len; i++) if (path[i] == '/') slash = i;
+    const char* name = path + slash + 1;
+    int name_len = len - (slash + 1);
+    if (name_len <= 0 || name_len >= MUNIN_MAX_NAME) return -1;
+
+    int parent = (slash == 0) ? MUNIN_ROOT : resolve_n(path, slash);
+    if (parent < 0 || g_inodes[parent].type != INODE_DIR) return -1;
+
+    Inode* p = &g_inodes[parent];
+    for (int b = 0; b < MUNIN_DIRECT; b++) {
+        if (p->blocks[b] == NO_BLOCK) continue;
+        Dirent* de = (Dirent*)g_blocks[p->blocks[b]];
+        for (uint32_t k = 0; k < DIRENTS_PER_BLOCK; k++) {
+            if (de[k].inode == -1) continue;
+            int i = 0;
+            while (i < name_len && de[k].name[i] && de[k].name[i] == name[i]) i++;
+            if (i == name_len && de[k].name[i] == '\0') {
+                Inode* c = &g_inodes[de[k].inode];
+                if (c->type == INODE_DIR && c->size != 0) return -1;    // non-empty dir
+                free_inode_blocks(c);        // free data blocks, size -> 0
+                c->type = INODE_FREE;       // release the inode
+                de[k].inode = -1;           // drop the dirent
+                p->size--;
+                return 0;
+            }
+        }
+    }
+    return -1;   // not found
+}

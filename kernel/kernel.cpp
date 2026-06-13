@@ -132,6 +132,13 @@ extern "C" void kmain(uint64_t mb_info) {
     }
     kprint("\n");
     vfs_close(dfd);
+    vfs_mkdir("/tmp");
+    kprint("3a after mkdir /tmp: "); munin_ls_path("/");
+    vfs_unlink("/hello");
+    vfs_unlink("/tmp");
+    kprint("3a after unlink:     "); munin_ls_path("/");
+    kprint("3a unlink /docs:     ");
+    kprint(vfs_unlink("/docs") == 0 ? "removed (BUG)\n" : "refused (ok)\n");
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 

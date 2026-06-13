@@ -77,3 +77,6 @@ int vfs_readdir(int fd, int index, char* name_out) {
     if (!f->used || f->type != INODE_DIR) return -1;
     return munin_dirent(f->inode, index, name_out, MUNIN_MAX_NAME);
 }
+
+int vfs_mkdir(const char* path)  { return munin_mkdir(path) >= 0 ? 0 : -1; }
+int vfs_unlink(const char* path) { return munin_unlink(path); }

@@ -134,6 +134,12 @@ extern "C" uint64_t isr_handler(registers* regs) {
             case SYS_READDIR:
                 regs->rax = (uint64_t)vfs_readdir((int)regs->rdi, (int)regs->rsi, (char*)regs->rdx);
                 break;
+            case SYS_MKDIR:
+                regs->rax = (uint64_t)vfs_mkdir((const char*)regs->rdi);
+                break;
+            case SYS_UNLINK:
+                regs->rax = (uint64_t)vfs_unlink((const char*)regs->rdi);
+                break;
             case SYS_EXEC: {
                 uint64_t new_rsp = exec_current((char**)regs->rdi, (int)regs->rsi);
                 if (new_rsp) return new_rsp;   // resume in the new program

@@ -40,3 +40,10 @@ void munin_ls_path(const char* path);
 int  munin_write(const char* path, const void* buf, uint32_t len);
 // Read up to `len` bytes from the file at `path`. Returns bytes read, or -1.
 int  munin_read(const char* path, void* buf, uint32_t len);
+
+// ---- offset-aware primitives (step 2a, for the fd layer) ----
+int munin_type(int ino);              // INODE_FREE/FILE/DIR, or -1
+int munin_size(int ino);              // file size in bytes, or -1
+int munin_truncate(int ino);          // free a file's blocks, size -> 0
+int munin_read_inode(int ino, void* buf, uint32_t len, uint32_t offset);
+int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset);

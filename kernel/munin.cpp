@@ -276,3 +276,91 @@ int munin_read(const char* path, void* buf, uint32_t len) {
     }
     return (int)copied;
 }
+
+// =========================================================
+// step 2a: offset-aware primitives (for the fd / vfs layer)
+// =========================================================
+
+int munin_type(int ino) {
+    if (ino < 0 || ino >= MUNIN_MAX_INODES) return -1;
+    return (int)g_inodes[ino].type;
+}
+
+int munin_size(int ino) {
+    if (ino < 0 || ino >= MUNIN_MAX_INODES) return -1;
+    return (int)g_inodes[ino].size;
+}
+
+int munin_truncate(int ino) {
+    if (ino < 0 || ino >= MUNIN_MAX_INODES) return -1;
+    Inode* f = &g_inodes[ino];
+    if (f->type != INODE_FILE) return -1;
+    free_inode_blocks(f);              // frees blocks, sets size = 0
+    return 0;
+}
+
+// Read up to `len` bytes from inode `ino` starting at `offset`.
+// Returns bytes read (0 at/after EOF), or -1 on error. Holes read as zeros.
+int munin_read_inode(int ino, void* buf, uint32_t len, uint32_t offset) {
+    if (ino < 0 || ino >= MUNIN_MAX_INODES) return -1;
+    Inode* f = &g_inodes[ino];
+    if (f->type != INODE_FILE) return -1;
+    if (offset >= f->size) return 0;
+
+    uint32_t avail = f->size - offset;
+    if (len > avail) len = avail;
+
+    uint8_t* dst = (uint8_t*)buf;
+    uint32_t got = 0;
+    while (got < len) {
+        uint32_t pos  = offset + got;
+        int      b    = (int)(pos / MUNIN_BLOCK_SIZE);
+        uint32_t boff = pos % MUNIN_BLOCK_SIZE;
+        if (b >= MUNIN_DIRECT) break;
+        uint32_t chunk = MUNIN_BLOCK_SIZE - boff;
+        if (chunk > len - got) chunk = len - got;
+        if (f->blocks[b] == NO_BLOCK) {
+            for (uint32_t i = 0; i < chunk; i++) dst[got + i] = 0;    //hole reads as zeros 
+        } else {
+            uint8_t* srcb = g_blocks[f->blocks[b]] + boff;
+            for (uint32_t i = 0; i < chunk; i++) dst[got + i] = srcb[i];
+        }
+        got += chunk;
+    }
+    return (int)got;
+}
+
+// Write `len` bytes to inode `ino` starting at `offset`, growing the file and
+// allocating blocks as needed. Returns bytes written (may be short if the data 
+// region fills), or -1 on error.
+int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset) {
+    if (ino < 0 || ino >= MUNIN_MAX_INODES) return -1;
+    Inode* f = &g_inodes[ino];
+    if (f->type != INODE_FILE) return -1;
+
+    uint32_t cap = (uint32_t)MUNIN_DIRECT * MUNIN_BLOCK_SIZE;
+    if (offset >= cap) return -1;
+    if (offset + len > cap) len = cap - offset;       // clamp to capacity
+
+    const uint8_t* src = (const uint8_t*)buf;
+    uint32_t written = 0;
+    while (written < len) {
+        uint32_t pos  = offset + written;
+        int      b    = (int)(pos / MUNIN_BLOCK_SIZE);
+        uint32_t boff = pos % MUNIN_BLOCK_SIZE;
+        if (f->blocks[b] == NO_BLOCK) {
+            int blk = alloc_block();
+            if (blk < 0) break;                    // out of space; partial write
+            f->blocks[b] = (uint32_t)blk;
+            uint8_t* z = g_blocks[blk];            // zero new block (sparse gaps read 0)
+            for (uint32_t i = 0; i < MUNIN_BLOCK_SIZE; i++) z[i] = 0;
+        }
+        uint32_t chunk = MUNIN_BLOCK_SIZE - boff;
+        if (chunk > len - written) chunk = len - written;
+        uint8_t* dst = g_blocks[f->blocks[b]] + boff;
+        for (uint32_t i = 0; i < chunk; i++) dst[i] = src[written + i];
+        written += chunk;
+    }
+    if (offset + written > f->size) f->size = offset + written;
+    return (int)written;
+}

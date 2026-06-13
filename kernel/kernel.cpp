@@ -74,6 +74,7 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint("munin /         : "); munin_ls_path("/");
     kprint("munin /docs     : "); munin_ls_path("/docs");
     kprint("munin /docs/sub : "); munin_ls_path("/docs/sub");
+
     const char* msg = "Muninn flies over Midgard.";
     uint32_t mlen = 0; while (msg[mlen]) mlen++;
     munin_write("/docs/notes", msg, mlen);
@@ -82,6 +83,16 @@ extern "C" void kmain(uint64_t mb_info) {
     if (rn < 0) rn = 0;
     rb[rn] = '\0';
     kprint("munin read /docs/notes: "); kprint(rb); kprint("\n");
+
+    int tino = munin_resolve("/docs/notes");
+    munin_truncate(tino);
+    munin_write_inode(tino, "abc", 3, 0);
+    munin_write_inode(tino, "DEF", 3, 3);     // offset write picks up where the last left off
+    char ob[16];
+    int on = munin_read_inode(tino, ob, 15, 0);
+    if (on < 0) on = 0;
+    ob[on] = '\0';
+    kprint("munin offset rw: "); kprint(ob); kprint("\n");
         kprint("HrafnOS console ready.\n");
     }
 

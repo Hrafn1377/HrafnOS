@@ -12,6 +12,8 @@
 #include "fb.hpp"
 #include "console.hpp"
 #include "munin.hpp"
+#include "vfs.hpp"
+#include "syscall.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -108,6 +110,17 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint_char('\n');
 
     sched_init();
+    int lfd = vfs_open("/docs/log", O_CREAT | O_TRUNC | O_WRONLY);
+    vfs_write(lfd, "hello ", 6);
+    vfs_write(lfd, "world", 5);         // stateful offset continues after "hello "
+    vfs_close(lfd);
+    int rfd = vfs_open("/docs/log", O_RDONLY);
+    char vb[32];
+    int vn = vfs_read(rfd, vb, 31);
+    if (vn < 0) vn = 0;
+    vb[vn] = '\0';
+    vfs_close(rfd);
+    kprint("vfs read /docs/log: "); kprint(vb); kprint("\n"); 
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 

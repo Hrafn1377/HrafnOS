@@ -14,6 +14,7 @@
 #define MAX_ARG_LEN 64  
 
 static task*             current = nullptr;
+task* sched_current() { return current; }
 static volatile uint64_t g_ticks = 0;
 
 void sched_init() {
@@ -25,6 +26,7 @@ void sched_init() {
     boot->kstack_base = 0;
     boot->pml4       = vmm_kernel_space();   // idle runs in the kernel space
     boot->parent     = nullptr;
+    for (int i = 0; i < MAX_FDS; i++) boot->fds[i].used = false;
     current = boot;
 }
 
@@ -77,6 +79,7 @@ task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top) 
     t->kstack_base = kstack;
     t->pml4       = pml4;         // this process's private address space
     t->parent     = nullptr;     // spawned by the kernel, no parent
+    for (int i = 0; i < MAX_FDS; i++) t->fds[i].used = false;
     t->next       = current->next;
     current->next = t;
     return t;
@@ -180,6 +183,7 @@ int fork_current(registers* parent) {
     t->kstack_base = kstack;
     t->pml4       = child_space;
     t->parent     = current;       // for wait()
+    for (int i = 0; i < MAX_FDS; i++) t->fds[i] = current->fds[i];
     t->next       = current->next;
     current->next = t;
 

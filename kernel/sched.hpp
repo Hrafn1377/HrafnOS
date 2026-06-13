@@ -5,10 +5,22 @@ struct registers;      // defined in idt.hpp
 
 enum task_state { RUNNABLE, SLEEPING, WAITING, DEAD };
 
+#define MAX_FDS  16
+
+// One open file per slot. fds 0/1/2 are tty (handled in the syscall layer);
+// real files occupy slots 3..MAX_FDS-1.
+struct file_desc {
+    bool     used;
+    int32_t  inode;      // munin inode index
+    uint32_t offset;     // current read/write cursor
+    uint8_t  type;        // INODE_FILE / INODE_DIR
+};
+
 struct task {
     uint64_t   rsp;
     task*      next;
     task*      parent;
+    file_desc    fds[MAX_FDS];              // per-process open-file table
     task_state state;
     uint64_t   wake_tick;
     uint64_t   kstack_top;
@@ -20,6 +32,7 @@ struct task {
 void  sched_init();
 task* task_create(void (*entry)());                                   // kernel space
 task* task_create_user(uint64_t* pml4, uint64_t entry, uint64_t user_stack_top);
+task* sched_current();                        // the running task (for the vfs layer)
 
 // Replace the current task's address space with a freshly loaded ramdisk
 // program and return the rsp to resume on (a fabricated ring-3 frame), or 0 on

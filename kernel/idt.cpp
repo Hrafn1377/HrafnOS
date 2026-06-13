@@ -5,6 +5,7 @@
 #include "syscall.hpp"
 #include "io.hpp"
 #include "kbd.hpp"
+#include "vfs.hpp"
 
 struct idt_entry {
     uint16_t offset_low;
@@ -94,26 +95,42 @@ extern "C" uint64_t isr_handler(registers* regs) {
     if (regs->int_no == 0x80) {                 // system call (int $0x80)
         switch (regs->rax) {
             case SYS_WRITE: {
+                int         fd  = (int)regs->rdi;
                 const char* buf = (const char*)regs->rsi;
                 uint64_t    len = regs->rdx;
-                for (uint64_t i = 0; i < len; i++) kprint_char(buf[i]);
-                regs->rax = len;
+                if (fd == 1 || fd == 2) {              // stdout / stderr -> console
+                    for (uint64_t i = 0; i < len; i++) kprint_char(buf[i]);
+                    regs->rax = len;
+                } else {                                // a real file
+                    regs->rax = (uint64_t)vfs_write(fd, buf, (uint32_t)len);
+                }
                 break;
             }
             case SYS_READ: {
+                int      fd  = (int)regs->rdi;
                 char*    buf = (char*)regs->rsi;
                 uint64_t len = regs->rdx;
-                uint64_t n   = 0;
-                while (n < len) {
-                    int c = kbd_getchar();             // keyboard first
-                    if (c < 0) c = serial_getchar();   // then serial fallback
-                    if (c < 0) break;
-                    if (c == 0x7F) c = '\b';          // DEL -> BS (serial terminals send DEL)
-                    buf[n++] = (char)c;
+                if (fd == 0) {                          // stdin -> keyboard/serial
+                    uint64_t n = 0;
+                    while (n < len) {
+                        int c = kbd_getchar();             // keyboard first
+                        if (c < 0) c = serial_getchar();   // then serial fallback
+                        if (c < 0) break;
+                        if (c == 0x7F) c = '\b';          // DEL -> BS (serial terminals)
+                        buf[n++] = (char)c;
+                    }
+                    regs->rax = n;
+                } else {                                // a real file
+                    regs->rax = (uint64_t)vfs_read(fd, buf, (uint32_t)len);
                 }
-                regs->rax = n;
                 break;
             }
+            case SYS_OPEN:
+                regs->rax = (uint64_t)vfs_open((const char*)regs->rdi, (int)regs->rsi);
+                break;
+            case SYS_CLOSE:
+                regs->rax = (uint64_t)vfs_close((int)regs->rdi);
+                break;
             case SYS_EXEC: {
                 uint64_t new_rsp = exec_current((char**)regs->rdi, (int)regs->rsi);
                 if (new_rsp) return new_rsp;   // resume in the new program

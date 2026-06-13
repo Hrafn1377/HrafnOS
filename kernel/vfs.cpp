@@ -69,3 +69,11 @@ int vfs_write(int fd, const void* buf, uint32_t len) {
     if (n > 0) f->offset += (uint32_t)n;     // advance the cursor
     return n;
 }
+
+int vfs_readdir(int fd, int index, char* name_out) {
+    task* t = sched_current();
+    if (!t || fd < 3 || fd >= MAX_FDS) return -1;
+    file_desc* f = &t->fds[fd];
+    if (!f->used || f->type != INODE_DIR) return -1;
+    return munin_dirent(f->inode, index, name_out, MUNIN_MAX_NAME);
+}

@@ -364,3 +364,31 @@ int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset) {
     if (offset + written > f->size) f->size = offset + written;
     return (int)written;
 }
+
+// Fetch directory entry at logical postion `index` (0-based, empty slot skipped)
+// of directory inode `dir`. Copies the name into name_out (cap bytes, NUL-term).
+// Returns the child's type (INOE_FILE=1 / INODE_DIR=2) if found, 0 if past the
+// end, or -1 on error.
+int munin_dirent(int dir, int index, char* name_out, uint32_t cap) {
+    if (dir < 0 || dir >= MUNIN_MAX_INODES) return -1;
+    Inode* d = &g_inodes[dir];
+    if (d->type != INODE_DIR) return -1;
+    if (cap == 0) return -1;
+
+    int seen = 0;
+    for (int b = 0; b < MUNIN_DIRECT; b++) {
+        if (d->blocks[b] == NO_BLOCK) continue;
+        Dirent* de = (Dirent*)g_blocks[d->blocks[b]];
+        for (uint32_t k = 0; k < DIRENTS_PER_BLOCK; k++) {
+            if (de[k].inode == -1) continue;
+            if (seen == index) {
+                uint32_t i = 0;
+                for (; i + 1 < cap && de[k].name[i]; i++) name_out[i] = de[k].name[i];
+                name_out[i] = '\0';
+                return (int)g_inodes[de[k].inode].type;
+            }
+            seen++;
+        }
+    }
+    return 0;      // index past end
+}

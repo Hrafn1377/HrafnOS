@@ -121,6 +121,17 @@ extern "C" void kmain(uint64_t mb_info) {
     vb[vn] = '\0';
     vfs_close(rfd);
     kprint("vfs read /docs/log: "); kprint(vb); kprint("\n"); 
+    int dfd = vfs_open("/docs", O_RDONLY);
+    kprint("vfs readdir /docs:");
+    char dn[40];
+    for (int i = 0; ; i++) {
+        int dr = vfs_readdir(dfd, i, dn);
+        if (dr <= 0) break;
+        kprint(" "); kprint(dn);
+        if (dr == INODE_DIR) kprint("/");
+    }
+    kprint("\n");
+    vfs_close(dfd);
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 

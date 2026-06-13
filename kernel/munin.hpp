@@ -47,3 +47,6 @@ int munin_size(int ino);              // file size in bytes, or -1
 int munin_truncate(int ino);          // free a file's blocks, size -> 0
 int munin_read_inode(int ino, void* buf, uint32_t len, uint32_t offset);
 int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset);
+
+// Directory enumeration: entry `index` of dir inode -> name + chile type (step 2c).
+int munin_dirent(int dir, int index, char* name_out, uint32_t cap);

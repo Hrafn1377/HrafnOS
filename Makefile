@@ -65,8 +65,10 @@ kernel/font.o: kernel/font.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/font.cpp -o kernel/font.o
 kernel/ramdisk.o: kernel/ramdisk.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/ramdisk.cpp -o kernel/ramdisk.o
+kernel/munin.o: kernel/munin.cpp kernel/munin.hpp
+	$(CXX) $(CXXFLAGS) -c kernel/munin.cpp -o kernel/munin.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/kbd.o kernel/console.o kernel/font.o kernel/ramdisk.o kernel/embed.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/kbd.o kernel/console.o kernel/font.o kernel/ramdisk.o kernel/munin.o kernel/embed.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)

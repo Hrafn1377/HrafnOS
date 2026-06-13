@@ -11,6 +11,7 @@
 #include "userspace.hpp"
 #include "fb.hpp"
 #include "console.hpp"
+#include "munin.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -64,9 +65,14 @@ extern "C" void kmain(uint64_t mb_info) {
     // Bring up the framebuffer and draw a test pattern to prove we own the screen
     if (fb_init(mb_info)) {
         console_init();
+        munin_init();
+    munin_create(MUNIN_ROOT, "hello", INODE_FILE);
+    munin_create(MUNIN_ROOT, "docs",  INODE_DIR);
+    kprint("munin /: ");
+    munin_ls(MUNIN_ROOT);
         kprint("HrafnOS console ready.\n");
     }
-    
+
     kprint("ramdisk: ");
     for (uint32_t i = 0; i < ramdisk_count(); i++) {
         const ramdisk_entry* e = ramdisk_get(i);

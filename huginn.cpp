@@ -25,10 +25,64 @@ extern "C" {
     static void sys_wait()  { asm volatile("int $0x80" : : "a"(6L) : "memory"); }
     static void sys_exit()  { asm volatile("int $0x80" : : "a"(2L) : "memory"); }
 
+    // ---- file syscall wtappers (step 3b) ----
+    static long sys_open(const char* path, long flags) {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(7L), "D"(path), "S"(flags): "memory");
+        return r;
+    }
+    static long sys_close(long fd) {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(8L), "D"(fd) : "memory");
+        return r;
+    }
+    static long sys_readdir(long fd, long index, char* name) {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(9L), "D"(fd), "S"(index), "d"(name) : "memory");
+        return r;
+    }
+
     static void puts(const char* s) {
         long n = 0;
         while (s[n]) n++;
         sys_write(1, s, n);
+    }
+
+    // ---- tiny helpers + builtins (step 3b) ----
+    static bool streq(const char* a, const char* b) {
+        int i = 0;
+        while (a[i] && a[i] == b[i]) i++;
+        return a[i] == b[i];
+    }
+
+    static void cmd_ls(int argc, char** argv) {
+        const char* path = (argc >= 2) ? argv[1] : "/";     // 3d will default cwd
+        long fd = sys_open(path, 0);                        // O_RDONLY
+        if (fd < 0) { puts("ls: no such path\n"); return; }
+        char nm[40];
+        for (long i = 0; ; i++) {
+            long r = sys_readdir(fd, i, nm);
+            if (r <= 0) break;                   // 0 = end, -1 = not a dir
+            puts(nm);
+            if (r == 2) puts("/");               // 2 = INODE_DIR
+            puts("  ");
+        }
+        puts("\n");
+        sys_close(fd);
+    }
+
+    static void cmd_cat(int argc, char** argv) {
+        if (argc < 2) { puts("cat: missing file\n"); return; }
+        long fd = sys_open(argv[1], 0);             // O_RDONLY
+        if (fd < 0) { puts("cat: no such file\n"); return; }
+        char buf[128];
+        for (;;) {
+            long n = sys_read(fd, buf, 128);
+            if (n <= 0) break;
+            sys_write(1, buf, n);
+        }
+        puts("\n");
+        sys_close(fd);
     }
 
     void _start() {
@@ -66,6 +120,10 @@ extern "C" {
                 if (line[p] == ' ') line[p++] = 0;   // terminates the word
             }
             if (argc == 0) continue;
+
+            // ---- builtins first (step 3b) ----
+            if (streq(argv[0], "ls")) { cmd_ls(argc, argv); continue; }
+            if (streq(argv[0], "cat")) { cmd_cat(argc, argv); continue; }
 
             long pid = sys_fork();
             if (pid == 0) {

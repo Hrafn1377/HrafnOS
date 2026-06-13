@@ -41,6 +41,16 @@ extern "C" {
         asm volatile("int $0x80" : "=a"(r) : "a"(9L), "D"(fd), "S"(index), "d"(name) : "memory");
         return r;
     }
+    static long sys_mkdir(const char* path) {
+        long r;
+        asm volatile ("int $0x80" : "=a"(r) : "a"(10L), "D"(path) : "memory");
+        return r;
+    }
+    static long sys_unlink(const char* path) {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(11L), "D"(path) : "memory");
+        return r;
+    }
 
     static void puts(const char* s) {
         long n = 0;
@@ -73,16 +83,56 @@ extern "C" {
 
     static void cmd_cat(int argc, char** argv) {
         if (argc < 2) { puts("cat: missing file\n"); return; }
-        long fd = sys_open(argv[1], 0);             // O_RDONLY
+        long fd = sys_open(argv[1], 0);                    // O_RDONLY
         if (fd < 0) { puts("cat: no such file\n"); return; }
         char buf[128];
+        char last = '\n';
+        bool any  = false;
         for (;;) {
             long n = sys_read(fd, buf, 128);
             if (n <= 0) break;
             sys_write(1, buf, n);
+            last = buf[n - 1];
+            any  = true;
         }
-        puts("\n");
+        if (any && last != '\n') sys_write(1, "\n", 1);    // fresh line for the prompt
         sys_close(fd);
+    }
+
+    static void cmd_mkdir(int argc, char** argv) {
+        if (argc < 2) { puts("mkdir: missing path\n"); return; }
+        if (sys_mkdir(argv[1]) != 0) puts("mkdir: failed\n");
+    }
+
+    static void cmd_rm(int argc, char** argv) {
+        if (argc < 2) { puts("rm: missing path\n"); return; }
+        if (sys_unlink(argv[1]) != 0) puts("rm: failed\n");
+    }
+
+    // echo [words...]            -> stdout
+    // echo [words...] > <file>   -> write to file (needs spaces around '>')
+    static void cmd_echo(int argc, char** argv) {
+        int redir = -1;
+        for (int i = 1; i < argc; i++) if (streq(argv[i], ">")) { redir = i; break; }
+
+        long fd     = 1;        // default: stdout
+        int  end    = argc;     // print words argv[1..end)
+        bool opened = false;
+        if (redir >= 0) {
+            if (redir + 1 >= argc) { puts("echo: missing redirect target\n"); return; }
+            fd = sys_open(argv[redir + 1], 1 | 4 | 8);    // O_WRONLY|O_CREAT|O_TRUNC
+            if (fd < 0) { puts("echo: cannot open target\n"); return; }
+            opened = true;
+            end = redir;
+        }
+
+        for (int i = 1; i < end; i++) {
+            long len = 0; while (argv[i][len]) len++;
+            sys_write(fd, argv[i], len);
+            if (i + 1 < end) sys_write(fd, " ", 1);
+        }
+        sys_write(fd, "\n", 1);
+        if (opened) sys_close(fd);
     }
 
     void _start() {
@@ -124,6 +174,9 @@ extern "C" {
             // ---- builtins first (step 3b) ----
             if (streq(argv[0], "ls")) { cmd_ls(argc, argv); continue; }
             if (streq(argv[0], "cat")) { cmd_cat(argc, argv); continue; }
+            if (streq(argv[0], "mkdir")) { cmd_mkdir(argc, argv); continue; }
+            if (streq(argv[0], "rm")) { cmd_rm(argc, argv);      continue; }
+            if (streq(argv[0], "echo")) { cmd_echo(argc, argv);  continue; }
 
             long pid = sys_fork();
             if (pid == 0) {

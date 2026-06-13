@@ -45,6 +45,23 @@ static int alloc_inode(uint8_t type) {
     return -1;
 }
 
+// Look up a signle component (name, name_len) inside directory `dir`.
+// Returns the child inode index, or -1 if not present.
+static int dir_lookup(int dir, const char* name, int name_len) {
+    Inode* d = &g_inodes[dir];
+    for (int b = 0; b < MUNIN_DIRECT; b++) {
+        if (d->blocks[b] == NO_BLOCK) continue;
+        Dirent* de = (Dirent*)g_blocks[d->blocks[b]];
+        for (uint32_t k = 0; k < DIRENTS_PER_BLOCK; k++) {
+            if (de[k].inode == -1) continue;
+            int i = 0;
+            while (i < name_len && de[k].name[i] && de[k].name[i] == name[i]) i++;
+            if (i == name_len && de[k].name[i] == '\0') return de[k].inode;
+        }
+    }
+    return -1;
+}
+
 // Add a (name -> child) entry into directory `dir`.
 static bool add_dirent(int dir, const char* name, int child) {
     Inode* d = &g_inodes[dir];
@@ -87,6 +104,9 @@ void munin_init() {
 int munin_create(int dir, const char* name, uint8_t type) {
     if (dir < 0 || dir >= MUNIN_MAX_INODES) return -1;
     if (g_inodes[dir].type != INODE_DIR)    return -1;
+    int nl = 0; while (name[nl]) nl++;
+    if (nl == 0 || nl >= MUNIN_MAX_NAME)      return -1;
+    if (dir_lookup(dir, name, nl) >= 0)       return -1;      // already exists
 
     int ino = alloc_inode(type);
     if (ino < 0) return -1;
@@ -116,4 +136,71 @@ void munin_ls(int dir) {
         }
     }
     kprint("\n");
+}
+
+// ==============================================================
+// step 1b: path traversal
+// ==============================================================
+
+static int str_len(const char* s) { int n = 0; while (s[n]) n++; return n; }
+
+// Resolve the first `len` characters of an absolute path to an inode index.
+static int resolve_n(const char* path, int len) {
+    if (len < 1 || path[0] != '/') return -1;   // absolute only
+    int cur = MUNIN_ROOT;
+    int i = 1;                                   // skip leading '/'
+    while (i < len) {
+        while (i < len && path[i] == '/') i++;   // skip separators
+        if (i >= len) break;
+        int start = i;
+        while (i < len && path[i] != '/') i++;   // span one component
+        int clen = i - start;
+        if (clen > 0) {
+            if (g_inodes[cur].type != INODE_DIR) return -1;  // can't descend a file
+            int next = dir_lookup(cur, path + start, clen);
+            if (next < 0) return -1;
+            cur = next;
+        }
+    }
+    return cur;
+}
+
+int munin_resolve(const char* path) {
+    if (!path) return -1;
+    return resolve_n(path, str_len(path));
+}
+
+int munin_create_path(const char* path, uint8_t type) {
+    if (!path || path[0] != '/') return -1;
+    int len = str_len(path);
+    while (len > 1 && path[len - 1] == '/') len--;     // strip trailing '/'
+
+    int slash = 0;
+    for (int i = 0; i < len; i++) if (path[i] == '/') slash = i;
+
+    const char* name = path + slash + 1;
+    int name_len = len - (slash + 1);
+    if (name_len <= 0 || name_len >= MUNIN_MAX_NAME) return -1;
+
+    int parent = (slash == 0) ? MUNIN_ROOT : resolve_n(path, slash);
+    if (parent < 0 || g_inodes[parent].type != INODE_DIR) return -1;
+
+    // `name` points into `path` and isn't necessarily NUL-terminated at name_len
+    // (a trailing '/' may follow), so copy it into a small buffer first.
+    char nbuf[MUNIN_MAX_NAME];
+    int i = 0;
+    for (; i < name_len; i++) nbuf[i] = name[i];
+    nbuf[i] = '\0';
+
+    return munin_create(parent, nbuf, type);
+}
+
+int munin_mkdir(const char* path) {
+    return munin_create_path(path, INODE_DIR);
+}
+
+void munin_ls_path(const char* path) {
+    int ino = munin_resolve(path);
+    if (ino < 0) { kprint("munin: no such path\n"); return; }
+    munin_ls(ino);
 }

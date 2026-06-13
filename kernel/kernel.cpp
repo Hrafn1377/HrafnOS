@@ -66,10 +66,14 @@ extern "C" void kmain(uint64_t mb_info) {
     if (fb_init(mb_info)) {
         console_init();
         munin_init();
-    munin_create(MUNIN_ROOT, "hello", INODE_FILE);
-    munin_create(MUNIN_ROOT, "docs",  INODE_DIR);
-    kprint("munin /: ");
-    munin_ls(MUNIN_ROOT);
+    munin_mkdir("/docs");
+    munin_create_path("/hello", INODE_FILE);
+    munin_create_path("/docs/notes", INODE_FILE);
+    munin_mkdir("/docs/sub");
+    munin_create_path("/docs/sub/deep", INODE_FILE);
+    kprint("munin /         : "); munin_ls_path("/");
+    kprint("munin /docs     : "); munin_ls_path("/docs");
+    kprint("munin /docs/sub : "); munin_ls_path("/docs/sub");
         kprint("HrafnOS console ready.\n");
     }
 

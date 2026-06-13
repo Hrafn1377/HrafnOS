@@ -24,3 +24,13 @@ int munin_create(int dir, const char* name, uint8_t type);
 
 // Print the entries of directory inode `dir`.
 void munin_ls(int dir);
+
+// ---- path API (step 1b) ----
+// Resolve an absolute path ("/docs/notes") to an inode index, or -1.
+int  munin_resolve(const char* path);
+// Create a file or directort at an absolute path. Returns inode index, or -1.
+int  munin_create_path(const char* path, uint8_t type);
+// Convenience: create a directory at an absolute path.
+int  munin_mkdir(const char* path);
+// List the directoy named by an absolute path.
+void munin_ls_path(const char* path);

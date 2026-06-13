@@ -74,6 +74,14 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint("munin /         : "); munin_ls_path("/");
     kprint("munin /docs     : "); munin_ls_path("/docs");
     kprint("munin /docs/sub : "); munin_ls_path("/docs/sub");
+    const char* msg = "Muninn flies over Midgard.";
+    uint32_t mlen = 0; while (msg[mlen]) mlen++;
+    munin_write("/docs/notes", msg, mlen);
+    char rb[64];
+    int rn = munin_read("/docs/notes", rb, 63);
+    if (rn < 0) rn = 0;
+    rb[rn] = '\0';
+    kprint("munin read /docs/notes: "); kprint(rb); kprint("\n");
         kprint("HrafnOS console ready.\n");
     }
 

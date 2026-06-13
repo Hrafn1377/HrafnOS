@@ -34,3 +34,9 @@ int  munin_create_path(const char* path, uint8_t type);
 int  munin_mkdir(const char* path);
 // List the directoy named by an absolute path.
 void munin_ls_path(const char* path);
+
+// ---- file data (step 1c) ----
+// Overwrite the file at `path` with `len` bytes. Returns bytes written, or -1.
+int  munin_write(const char* path, const void* buf, uint32_t len);
+// Read up to `len` bytes from the file at `path`. Returns bytes read, or -1.
+int  munin_read(const char* path, void* buf, uint32_t len);

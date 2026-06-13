@@ -32,6 +32,10 @@ static int alloc_block() {
     return -1;
 }
 
+static void free_block(int blk) {
+    g_block_used[blk / 8] &= ~(1 << (blk % 8));
+}
+
 static int alloc_inode(uint8_t type) {
     for (int i = 0; i < MUNIN_MAX_INODES; i++) {
         if (g_inodes[i].type == INODE_FREE) {
@@ -203,4 +207,72 @@ void munin_ls_path(const char* path) {
     int ino = munin_resolve(path);
     if (ino < 0) { kprint("munin: no such path\n"); return; }
     munin_ls(ino);
+}
+
+// ============================================================
+// step 1c: file data (read / write)
+// ============================================================
+
+static void free_inode_blocks(Inode* f) {
+    for (int b = 0; b < MUNIN_DIRECT; b++) {
+        if (f->blocks[b] != NO_BLOCK) {
+            free_block((int)f->blocks[b]);
+            f->blocks[b] = NO_BLOCK;
+        }
+    }
+    f->size = 0;
+}
+
+// Overwrite the file at `path` with `len` bytes from `buf`.
+// Returns bytes written, or -1 on error (not a file, too big, out of space).
+int munin_write(const char* path, const void* buf, uint32_t len) {
+    int ino = munin_resolve(path);
+    if (ino < 0) return -1;
+    Inode* f = &g_inodes[ino];
+    if (f->type != INODE_FILE) return -1;
+
+    uint32_t max_bytes = (uint32_t)MUNIN_DIRECT * MUNIN_BLOCK_SIZE;
+    if (len > max_bytes) return -1;          // exceeds direct-block capacity
+
+    free_inode_blocks(f);                    // truncate existing content
+
+    const uint8_t* src = (const uint8_t*)buf;
+    uint32_t remaining = len;
+    int b = 0;
+    while (remaining > 0) {
+        int blk = alloc_block();
+        if (blk < 0) { free_inode_blocks(f); return -1; }   // out of space; roll back
+        f->blocks[b] = (uint32_t)blk;
+        uint32_t chunk = remaining < MUNIN_BLOCK_SIZE ? remaining : MUNIN_BLOCK_SIZE;
+        uint8_t* dst = g_blocks[blk];
+        for (uint32_t i = 0; i < chunk; i++) dst[i] = src[i];
+        src += chunk;
+        remaining -= chunk;
+        b++;
+    }
+    f->size = len;
+    return (int)len;
+}
+
+// Read up to `len` bytes from the file at `path` into `buf`.
+// Returns bytes read, or -1 on error.
+int munin_read(const char* path, void* buf, uint32_t len) {
+    int ino = munin_resolve(path);
+    if (ino < 0) return -1;
+    Inode* f = &g_inodes[ino];
+    if (f->type != INODE_FILE) return -1;
+
+    uint32_t n = f->size < len ? f->size : len;
+    uint8_t* dst = (uint8_t*)buf;
+    uint32_t copied = 0;
+    int b = 0;
+    while (copied < n) {
+        if (b >= MUNIN_DIRECT || f->blocks[b] == NO_BLOCK) break;   // safety
+        uint32_t chunk = (n - copied) < MUNIN_BLOCK_SIZE ? (n - copied) : MUNIN_BLOCK_SIZE;
+        uint8_t* srcb = g_blocks[f->blocks[b]];
+        for (uint32_t i = 0; i < chunk; i++) dst[copied + i] = srcb[i];
+        copied += chunk;
+        b++;
+    }
+    return (int)copied;
 }

@@ -58,6 +58,42 @@ extern "C" {
         sys_write(1, s, n);
     }
 
+    // ---- current working directory + path normalizer (step 3d) ----
+    static char cwd[128] = "/";
+    
+    // Normalize `in` (absolute, or relative to cwd) into a clean absolute path
+    // in `out`. Collapses '.', '..', and redundant slashes.
+    static void resolve_path(const char* in, char* out) {
+        int olen;
+        if (in[0] == '/') {
+            out[0] = '/'; olen = 1; out[1] = 0;
+        } else {
+            int i = 0; while (cwd[i]) { out[i] = cwd[i]; i++; } olen = i; out[olen] = 0;
+        }
+        int p = 0;
+        while (in[p]) {
+            while (in[p] == '/') p++;            // skip slash run
+            if (!in[p]) break;
+            int start = p;
+            while (in[p] && in[p] != '/') p++;
+            int clen = p - start;
+            if (clen == 1 && in[start] == '.') {
+                // "." -> stay
+            } else if (clen == 2 && in[start] == '.' && in[start + 1] == '.') {
+                if (olen > 1) {                               // pop last component
+                    while (olen > 1 && out[olen - 1] != '/') olen--;
+                    if (olen > 1) olen--;                     // drop the slash too
+                    out[olen] = 0;
+                }
+            } else {
+                if (out[olen - 1] != '/') out[olen++] = '/';
+                for (int k = 0; k < clen; k++) out[olen++] = in[start + k];
+                out[olen] = 0;
+            }
+        }
+        if (olen == 0) { out[0] = '/'; out[1] = 0; }
+    }
+
     // ---- tiny helpers + builtins (step 3b) ----
     static bool streq(const char* a, const char* b) {
         int i = 0;
@@ -66,8 +102,9 @@ extern "C" {
     }
 
     static void cmd_ls(int argc, char** argv) {
-        const char* path = (argc >= 2) ? argv[1] : "/";     // 3d will default cwd
-        long fd = sys_open(path, 0);                        // O_RDONLY
+       const char* arg = (argc >= 2) ? argv[1] : ".";           // no arg -> cwd
+        char abspath[128]; resolve_path(arg, abspath);
+        long fd = sys_open(abspath, 0);                   // O_RDONLY
         if (fd < 0) { puts("ls: no such path\n"); return; }
         char nm[40];
         for (long i = 0; ; i++) {
@@ -83,7 +120,8 @@ extern "C" {
 
     static void cmd_cat(int argc, char** argv) {
         if (argc < 2) { puts("cat: missing file\n"); return; }
-        long fd = sys_open(argv[1], 0);                    // O_RDONLY
+        char abspath[128]; resolve_path(argv[1], abspath);
+        long fd = sys_open(abspath, 0);                    // O_RDONLY
         if (fd < 0) { puts("cat: no such file\n"); return; }
         char buf[128];
         char last = '\n';
@@ -101,12 +139,14 @@ extern "C" {
 
     static void cmd_mkdir(int argc, char** argv) {
         if (argc < 2) { puts("mkdir: missing path\n"); return; }
-        if (sys_mkdir(argv[1]) != 0) puts("mkdir: failed\n");
+        char abspath[128]; resolve_path(argv[1], abspath);
+        if (sys_mkdir(abspath) != 0) puts("mkdir: failed\n");
     }
 
     static void cmd_rm(int argc, char** argv) {
         if (argc < 2) { puts("rm: missing path\n"); return; }
-        if (sys_unlink(argv[1]) != 0) puts("rm: failed\n");
+        char abspath[128]; resolve_path(argv[1], abspath);
+        if (sys_unlink(abspath) != 0) puts("rm: failed\n");
     }
 
     // echo [words...]            -> stdout
@@ -120,7 +160,8 @@ extern "C" {
         bool opened = false;
         if (redir >= 0) {
             if (redir + 1 >= argc) { puts("echo: missing redirect target\n"); return; }
-            fd = sys_open(argv[redir + 1], 1 | 4 | 8);    // O_WRONLY|O_CREAT|O_TRUNC
+            char abspath[128]; resolve_path(argv[redir + 1], abspath);
+            fd = sys_open(abspath, 1 | 4 | 8);    // O_WRONLY|O_CREAT|O_TRUNC
             if (fd < 0) { puts("echo: cannot open target\n"); return; }
             opened = true;
             end = redir;
@@ -135,10 +176,22 @@ extern "C" {
         if (opened) sys_close(fd);
     }
 
+    static void cmd_cd(int argc, char** argv) {
+        const char* arg = (argc >= 2) ? argv[1] : "/";
+        char abspath[128]; resolve_path(arg, abspath);
+        long fd = sys_open(abspath, 0);
+        if (fd < 0) { puts("cd: no such directory\n"); return; }
+        char nm[40];
+        long r = sys_readdir(fd, 0, nm);       // >= 0 => it is a directory (0 = empty)
+        sys_close(fd);
+        if (r < 0) { puts("cd: not a directory\n"); return; }
+        int i = 0; while (abspath[i]) { cwd[i] = abspath[i]; i++; } cwd[i] = 0;
+    }
+
     void _start() {
         char line[64];
         for (;;) {
-            puts("$ ");
+           puts(cwd); puts(" $ ");
 
             // Read a line, char by char, echoing as we go. SYS_READ is non-blocking,
             // so when nothing's typed we yield the CPU instead of spinng.
@@ -177,6 +230,7 @@ extern "C" {
             if (streq(argv[0], "mkdir")) { cmd_mkdir(argc, argv); continue; }
             if (streq(argv[0], "rm")) { cmd_rm(argc, argv);      continue; }
             if (streq(argv[0], "echo")) { cmd_echo(argc, argv);  continue; }
+            if (streq(argv[0], "cd")) { cmd_cd(argc, argv); continue; }
 
             long pid = sys_fork();
             if (pid == 0) {

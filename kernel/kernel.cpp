@@ -15,6 +15,7 @@
 #include "vfs.hpp"
 #include "syscall.hpp"
 #include "pci.hpp"
+#include "vblk.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -87,7 +88,7 @@ extern "C" void kmain(uint64_t mb_info) {
     }
     kprint_char('\n');
 
-    pci_scan_dump();
+    vblk_init();
     sched_init();
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");

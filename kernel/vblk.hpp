@@ -1,0 +1,7 @@
+#pragma once
+#include <stdint.h>
+
+// Find the virtio-blk device, run the legacy init handshake, read capacity.
+// Return true if the device is present and responded.
+bool        vblk_init();
+uint64_t vblk_capacity();        // disk size in 512-byte sectors (valid after init)

@@ -80,3 +80,4 @@ int vfs_readdir(int fd, int index, char* name_out) {
 
 int vfs_mkdir(const char* path)  { return munin_mkdir(path) >= 0 ? 0 : -1; }
 int vfs_unlink(const char* path) { return munin_unlink(path); }
+int vfs_sync()  { munin_flush(); return 0; }

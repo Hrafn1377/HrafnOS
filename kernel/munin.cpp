@@ -438,7 +438,7 @@ int munin_unlink(const char* path) {
 // P2: on-disk persistence (superblock + inode table + bitmap + data)
 // ==============================================================
 
-# define MUNIN_MAGIC 0x4D554E49u         // "MUNI"
+#define MUNIN_MAGIC 0x4D554E49u         // "MUNI"
 
 // On-disk layout, in 512-byte sectors:
 //    [0]           superblock
@@ -472,7 +472,7 @@ static void disk_read_bytes(uint32_t start_sector, void* dst, uint32_t nbytes) {
     uint8_t* p = (uint8_t*)dst;
     uint32_t full = nbytes / 512;
     for (uint32_t i = 0; i < full; i++)
-        vblk_read(start_sector * i, p + (uint64_t)i * 512);
+        vblk_read(start_sector + i, p + (uint64_t)i * 512);
     uint32_t rem = nbytes % 512;
     if (rem) {
         uint8_t scratch[512];

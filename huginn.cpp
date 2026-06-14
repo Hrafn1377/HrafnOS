@@ -51,6 +51,11 @@ extern "C" {
         asm volatile("int $0x80" : "=a"(r) : "a"(11L), "D"(path) : "memory");
         return r;
     }
+    static long sys_sync() {
+        long r;
+        asm volatile("int $0x80" : "=a"(r) : "a"(12L) : "memory");
+        return r;
+    }
 
     static void puts(const char* s) {
         long n = 0;
@@ -314,6 +319,7 @@ extern "C" {
             if (streq(argv[0], "ls")) { cmd_ls(argc, argv); continue; }
             if (streq(argv[0], "cat")) { cmd_cat(argc, argv); continue; }
             if (streq(argv[0], "mkdir")) { cmd_mkdir(argc, argv); continue; }
+            if (streq(argv[0], "sync")) { sys_sync(); puts("synced\n"); continue; }
             if (streq(argv[0], "rm")) { cmd_rm(argc, argv);      continue; }
             if (streq(argv[0], "echo")) { cmd_echo(argc, argv);  continue; }
             if (streq(argv[0], "cd")) { cmd_cd(argc, argv); continue; }
@@ -321,6 +327,7 @@ extern "C" {
             if (streq(argv[0], "touch")) { cmd_touch(argc, argv); continue; }
             if (streq(argv[0], "clear")) { cmd_clear(argc, argv); continue; }
             if (streq(argv[0], "help")) { cmd_help(argc, argv); continue; }
+            
 
             long pid = sys_fork();
             if (pid == 0) {

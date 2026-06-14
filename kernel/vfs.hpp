@@ -16,3 +16,4 @@ int vfs_readdir(int fd, int index, char* name_out);
 
 int vfs_mkdir(const char* path);       // create directory; 0 ok, -1 err
 int vfs_unlink(const char* path);      // remove file/empty dir; 0 ok, -1 err
+int vfs_sync();                       // flush the whole filesystem to disk; returns 0

@@ -1,5 +1,6 @@
 #include "munin.hpp"
 #include "serial.hpp"   // kprint
+#include "vblk.hpp"
 
 // On-disk-style structures, but for now they live entirely in RAM.
 
@@ -431,4 +432,80 @@ int munin_unlink(const char* path) {
         }
     }
     return -1;   // not found
+}
+
+// ==============================================================
+// P2: on-disk persistence (superblock + inode table + bitmap + data)
+// ==============================================================
+
+# define MUNIN_MAGIC 0x4D554E49u         // "MUNI"
+
+// On-disk layout, in 512-byte sectors:
+//    [0]           superblock
+//    [1 ..]        inode table
+//    [..]          block bitmap
+//    [.. ..]       data region (the 256 KiB of g_blocks)
+static const uint32_t SB_SECTOR      = 0;
+static const uint32_t INODE_SECTOR   = 1;
+static const uint32_t INODE_SECTORS  = (sizeof(g_inodes) + 511) / 512;
+static const uint32_t BITMAP_SECTOR  = INODE_SECTOR + INODE_SECTORS;
+static const uint32_t BITMAP_SECTORS = (sizeof(g_block_used) + 511) / 512;
+static const uint32_t DATA_SECTOR    = BITMAP_SECTOR + BITMAP_SECTORS;
+
+// Write nbytes from src across sectors starting at start_sector. The last
+// sector is padded from a scratch buffer when nbytes isn't a multiple of 512.
+static void disk_write_bytes(uint32_t start_sector, const void* src, uint32_t nbytes) {
+    const uint8_t* p = (const uint8_t*)src;
+    uint32_t full = nbytes / 512;
+    for (uint32_t i = 0; i < full; i++)
+        vblk_write(start_sector + i, (void*)(p + (uint64_t)i * 512));
+    uint32_t rem = nbytes % 512;
+    if (rem) {
+        uint8_t scratch[512];
+        for (uint32_t i = 0; i <512; i++) scratch[i] = 0;
+        for (uint32_t i = 0; i < rem; i++) scratch[i] = p[full * 512 + i];
+        vblk_write(start_sector + full, scratch);
+    }
+}
+
+static void disk_read_bytes(uint32_t start_sector, void* dst, uint32_t nbytes) {
+    uint8_t* p = (uint8_t*)dst;
+    uint32_t full = nbytes / 512;
+    for (uint32_t i = 0; i < full; i++)
+        vblk_read(start_sector * i, p + (uint64_t)i * 512);
+    uint32_t rem = nbytes % 512;
+    if (rem) {
+        uint8_t scratch[512];
+        vblk_read(start_sector + full, scratch);
+        for (uint32_t i = 0; i < rem; i++) p[full * 512 + i] = scratch[i];
+    }
+}
+
+// Write the whole in-RAM filesystem out to disk.
+void munin_flush() {
+    uint8_t sb[512];
+    for (uint32_t i = 0; i < 512; i++) sb[i] = 0;
+    uint32_t* w = (uint32_t*)sb;
+    w[0] = MUNIN_MAGIC;
+    w[1] = 1;                // version
+    w[2] = MUNIN_MAX_INODES;
+    w[3] = MUNIN_NUM_BLOCKS;
+    vblk_write(SB_SECTOR, sb);
+    disk_write_bytes(INODE_SECTOR,  g_inodes,     sizeof(g_inodes));
+    disk_write_bytes(BITMAP_SECTOR, g_block_used, sizeof(g_block_used));
+    disk_write_bytes(DATA_SECTOR,   g_blocks,     sizeof(g_blocks));
+}
+
+// Load the filesystem from disk if a valid superblock is present.
+// Returns true if mounted, false if the disk has no munin filesystems.
+bool munin_mount() {
+    uint8_t sb[512];
+    vblk_read(SB_SECTOR, sb);
+    uint32_t* w = (uint32_t*)sb;
+    if (w[0] != MUNIN_MAGIC || w[2] != MUNIN_MAX_INODES || w[3] != MUNIN_NUM_BLOCKS)
+        return false;        // blank or foreign disk
+    disk_read_bytes(INODE_SECTOR,   g_inodes,     sizeof(g_inodes));
+    disk_read_bytes(BITMAP_SECTOR,  g_block_used, sizeof(g_block_used));
+    disk_read_bytes(DATA_SECTOR,    g_blocks,     sizeof(g_blocks));
+    return true;
 }

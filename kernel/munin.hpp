@@ -53,3 +53,7 @@ int munin_dirent(int dir, int index, char* name_out, uint32_t cap);
 
 // Remove a file or empty directory by absolute path. 0 on success, -1 on error (step 3a).
 int munin_unlink(const char* path);
+
+// ---- on-disk persistence (P2) ----
+void munin_flush();       // write the whole filesystems to disk
+bool munin_mount();       // load from disk; true if a valid fs was found

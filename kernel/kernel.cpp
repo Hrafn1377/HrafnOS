@@ -69,11 +69,18 @@ extern "C" void kmain(uint64_t mb_info) {
     // Bring up the framebuffer and draw a test pattern to prove we own the screen
     if (fb_init(mb_info)) {
         console_init();
-        munin_init();
-        munin_mkdir("/docs");
-        munin_mkdir("/bin");
-        munin_create_path("/docs/readme", INODE_FILE);
-        munin_write("/docs/readme", "Welcome to HrafnOS.\n", 20);
+        vblk_init();
+        if (munin_mount()) {
+            kprint("munin: mounted existing filesystem\n");
+        } else {
+            munin_init();
+            munin_mkdir("/docs");
+            munin_mkdir("/bin");
+            munin_create_path("/docs/readme", INODE_FILE);
+            munin_write("/docs/readme", "Welcome to HrafnOS.\n", 20);
+            munin_flush();
+            kprint("munin: formatted new filesystem\n");
+        }
         kprint("HrafnOS console ready.\n");
     }
 
@@ -88,15 +95,7 @@ extern "C" void kmain(uint64_t mb_info) {
     }
     kprint_char('\n');
 
-    vblk_init();
-    {
-        uint8_t sec[512];
-        vblk_read(0, sec);
-        uint32_t* counter = (uint32_t*)sec;
-        kprint("vblk: boot count = "); kprint_uint(*counter); kprint("\n");
-        (*counter)++;
-        vblk_write(0, sec);
-    }
+    
     sched_init();
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");

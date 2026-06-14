@@ -14,6 +14,7 @@
 #include "munin.hpp"
 #include "vfs.hpp"
 #include "syscall.hpp"
+#include "pci.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -86,6 +87,7 @@ extern "C" void kmain(uint64_t mb_info) {
     }
     kprint_char('\n');
 
+    pci_scan_dump();
     sched_init();
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");

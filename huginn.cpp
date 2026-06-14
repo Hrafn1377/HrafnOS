@@ -218,29 +218,84 @@ extern "C" {
         puts("anything else runs a ramdisk program (e.g. one, two)\n");
     }
 
+    // ---- command history (polish) ----
+    #define HIST_N 16
+    static char hist[HIST_N][64];
+    static int  hist_count = 0;
+
+    static void hist_push(const char* s) {
+        if (!s[0]) return;
+        if (hist_count > 0) {           // skip consecutive duplicates
+            int j = 0; while (s[j] && s[j] == hist[hist_count - 1][j]) j++;
+            if (!s[j] && !hist[hist_count - 1][j]) return;
+        }
+        if (hist_count == HIST_N) {          // full: drop oldest, shift down
+            for (int i = 1; i < HIST_N; i++) {
+                int j = 0; while (hist[i][j]) { hist[i - 1][j] = hist[i][j]; j++; }
+                hist[i - 1][j] = 0;
+            }
+            hist_count = HIST_N - 1;
+        }
+        int j = 0; while (s[j] && j < 63) { hist[hist_count][j] = s[j]; j++; }
+        hist[hist_count][j] = 0;
+        hist_count++;
+    }
+
+    // Read one byte, yielding while empty, but give up after a bounded spin so a
+    // long ESC keypress can't hang the shell waiting for bytes that never come.
+    static long read_byte_bounded(char* c) {
+        for (int tries = 0; tries < 20000; tries++) {
+            if (sys_read(0, c, 1) > 0) return 1;
+            sys_yield();
+        }
+        return 0;
+    }
+
+    static int read_line(char* line) {
+        int n = 0;
+        int hpos = hist_count;            // cursor: == hist_count means "fresh empty line"
+        for (;;) {
+            char ch;
+            long r = sys_read(0, &ch, 1);
+            if (r <= 0) { sys_yield(); continue; }
+
+            if (ch == '\033') {          // ESC: possible arrow key
+                char a, b;
+                if (!read_byte_bounded(&a)) continue; // lone ESC -> ignore
+                if (a != '[') continue;
+                if (!read_byte_bounded(&b)) continue;
+                if (b == 'A' || b == 'B') {
+                    while (n > 0) { sys_write(1, "\b \b", 3); n--; }  // erase current line
+                    if (b == 'A') { if (hpos > 0) hpos--; }          // up: older
+                    else          { if (hpos < hist_count) hpos++; } // down: newer
+                    if (hpos < hist_count) {
+                        int i = 0; while (hist[hpos][i] && i < 63) { line[i] = hist[hpos][i]; i++; }
+                        n = i;
+                        sys_write(1, line, n);              // redraw recalled line
+                    } else {
+                        n = 0;                             // past newest -> blank
+                    }
+                }
+                continue;                     // ignore other escape sequences
+            }
+
+            if (ch == '\r' || ch == '\n') { sys_write(1, "\n", 1); break; }
+            if (ch == '\b') { if (n > 0) { n--; sys_write(1, "\b \b", 3); } continue; }
+            if (ch < ' ') continue;              // drop other control chars
+            sys_write(1, &ch, 1);
+            if (n < 63) line[n++] = ch;
+        }
+        line[n] = 0;
+        return n;
+    }
 
     void _start() {
         char line[64];
         for (;;) {
            puts(cwd); puts(" $ ");
-
-            // Read a line, char by char, echoing as we go. SYS_READ is non-blocking,
-            // so when nothing's typed we yield the CPU instead of spinng.
-            int n = 0;
-            for (;;) {
-                char ch;
-                long r = sys_read(0, &ch, 1);
-                if (r <= 0) { sys_yield(); continue; }
-                if (ch == '\r' || ch == '\n') { sys_write(1, "\n", 1); break; }
-                if (ch == '\b') {                  // backspace
-                    if (n > 0) { n--; sys_write(1, "\b \b", 3); }     //erase last char
-                    continue;                         // (ignored at column 0: guards prompt)
-                }
-                sys_write(1, &ch, 1);            // echo
-                if (n < 63) line[n++] = ch;
-            }
-            line[n] = 0;
+            int n = read_line(line);
             if (n == 0) continue;          // empty line
+            hist_push(line);
 
             //Split the line into words: argv[0] is the command, the rest are args.
             char* argv[16];

@@ -89,6 +89,14 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint_char('\n');
 
     vblk_init();
+    {
+        uint8_t sec[512];
+        vblk_read(0, sec);
+        uint32_t* counter = (uint32_t*)sec;
+        kprint("vblk: boot count = "); kprint_uint(*counter); kprint("\n");
+        (*counter)++;
+        vblk_write(0, sec);
+    }
     sched_init();
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");

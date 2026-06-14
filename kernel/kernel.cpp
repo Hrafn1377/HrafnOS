@@ -68,33 +68,10 @@ extern "C" void kmain(uint64_t mb_info) {
     if (fb_init(mb_info)) {
         console_init();
         munin_init();
-    munin_mkdir("/docs");
-    munin_create_path("/hello", INODE_FILE);
-    munin_create_path("/docs/notes", INODE_FILE);
-    munin_mkdir("/docs/sub");
-    munin_create_path("/docs/sub/deep", INODE_FILE);
-    kprint("munin /         : "); munin_ls_path("/");
-    kprint("munin /docs     : "); munin_ls_path("/docs");
-    kprint("munin /docs/sub : "); munin_ls_path("/docs/sub");
-
-    const char* msg = "Muninn flies over Midgard.";
-    uint32_t mlen = 0; while (msg[mlen]) mlen++;
-    munin_write("/docs/notes", msg, mlen);
-    char rb[64];
-    int rn = munin_read("/docs/notes", rb, 63);
-    if (rn < 0) rn = 0;
-    rb[rn] = '\0';
-    kprint("munin read /docs/notes: "); kprint(rb); kprint("\n");
-
-    int tino = munin_resolve("/docs/notes");
-    munin_truncate(tino);
-    munin_write_inode(tino, "abc", 3, 0);
-    munin_write_inode(tino, "DEF", 3, 3);     // offset write picks up where the last left off
-    char ob[16];
-    int on = munin_read_inode(tino, ob, 15, 0);
-    if (on < 0) on = 0;
-    ob[on] = '\0';
-    kprint("munin offset rw: "); kprint(ob); kprint("\n");
+        munin_mkdir("/docs");
+        munin_mkdir("/bin");
+        munin_create_path("/docs/readme", INODE_FILE);
+        munin_write("/docs/readme", "Welcome to HrafnOS.\n", 20);
         kprint("HrafnOS console ready.\n");
     }
 
@@ -110,35 +87,6 @@ extern "C" void kmain(uint64_t mb_info) {
     kprint_char('\n');
 
     sched_init();
-    int lfd = vfs_open("/docs/log", O_CREAT | O_TRUNC | O_WRONLY);
-    vfs_write(lfd, "hello ", 6);
-    vfs_write(lfd, "world", 5);         // stateful offset continues after "hello "
-    vfs_close(lfd);
-    int rfd = vfs_open("/docs/log", O_RDONLY);
-    char vb[32];
-    int vn = vfs_read(rfd, vb, 31);
-    if (vn < 0) vn = 0;
-    vb[vn] = '\0';
-    vfs_close(rfd);
-    kprint("vfs read /docs/log: "); kprint(vb); kprint("\n"); 
-    int dfd = vfs_open("/docs", O_RDONLY);
-    kprint("vfs readdir /docs:");
-    char dn[40];
-    for (int i = 0; ; i++) {
-        int dr = vfs_readdir(dfd, i, dn);
-        if (dr <= 0) break;
-        kprint(" "); kprint(dn);
-        if (dr == INODE_DIR) kprint("/");
-    }
-    kprint("\n");
-    vfs_close(dfd);
-    vfs_mkdir("/tmp");
-    kprint("3a after mkdir /tmp: "); munin_ls_path("/");
-    vfs_unlink("/hello");
-    vfs_unlink("/tmp");
-    kprint("3a after unlink:     "); munin_ls_path("/");
-    kprint("3a unlink /docs:     ");
-    kprint(vfs_unlink("/docs") == 0 ? "removed (BUG)\n" : "refused (ok)\n");
     spawn("huginn");
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 

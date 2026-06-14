@@ -19,20 +19,3 @@ prog_huginn_start:
     incbin "huginn.elf"
 prog_huginn_end:
 
-global prog_help_start
-global prog_help_end
-prog_help_start:
-    incbin "help.elf"
-prog_help_end:
-
-global prog_clear_start
-global prog_clear_end
-prog_clear_start:
-    incbin "clear.elf"
-prog_clear_end:
-
-global prog_echo_start
-global prog_echo_end
-prog_echo_start:
-    incbin "echo.elf"
-prog_echo_end:

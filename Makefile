@@ -18,14 +18,8 @@ two.elf: two.cpp user.ld
 	$(CXX) $(USER_CXXFLAGS) -T user.ld -o two.elf two.cpp
 huginn.elf: huginn.cpp user.ld
 	$(CXX) $(USER_CXXFLAGS) -T user.ld -o huginn.elf huginn.cpp
-help.elf: help.cpp user.ld
-	$(CXX) $(USER_CXXFLAGS) -T user.ld -o help.elf help.cpp
-clear.elf: clear.cpp user.ld
-	$(CXX) $(USER_CXXFLAGS) -T user.ld -o clear.elf clear.cpp
-echo.elf: echo.cpp user.ld
-	$(CXX) $(USER_CXXFLAGS) -T user.ld -o echo.elf echo.cpp
 
-kernel/embed.o: kernel/embed.asm one.elf two.elf huginn.elf help.elf clear.elf echo.elf
+kernel/embed.o: kernel/embed.asm one.elf two.elf huginn.elf
 	$(ASM) -f elf64 kernel/embed.asm -o kernel/embed.o
 
 # ---- kernel ----
@@ -57,7 +51,7 @@ kernel/elf.o: kernel/elf.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/elf.cpp -o kernel/elf.o
 kernel/fb.o: kernel/fb.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/fb.cpp -o kernel/fb.o
-kernerl/kbd.o: kernel/kbd.cpp
+kernel/kbd.o: kernel/kbd.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/kbd.cpp -o kernel/kbd.o
 kernel/console.o: kernel/console.cpp
 	$(CXX) $(CXXFLAGS) -c kernel/console.cpp -o kernel/console.o
@@ -88,4 +82,4 @@ run: iso
 		-serial mon:stdio
 
 clean:
-	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso one.elf two.elf huginn.elf help.elf clear.elf echo.elf
+	rm -f boot/*.o kernel/*.o iso/boot/hrafnos.bin hrafnos.iso one.elf two.elf huginn.elf

@@ -188,6 +188,37 @@ extern "C" {
         int i = 0; while (abspath[i]) { cwd[i] = abspath[i]; i++; } cwd[i] = 0;
     }
 
+    static void cmd_pwd(int, char**) {
+        puts(cwd); puts("\n");
+    }
+
+    static void cmd_clear(int, char**) {
+        puts("\033[2J\033[H");
+    }
+
+    static void cmd_touch(int argc, char** argv) {
+        if (argc < 2) { puts("touch: missing file\n"); return; }
+        char abspath[128]; resolve_path(argv[1], abspath);
+        long fd = sys_open(abspath, 4);             // O_CREAT, no truncate
+        if (fd < 0) { puts("touch: failed\n"); return; }
+        sys_close(fd);
+    }
+
+    static void cmd_help(int, char**) {
+        puts("builtins: ls cat cd pwd mkdir rm touch echo clear help\n");
+        puts("  ls [path]             list a directory\n");
+        puts("  cat <file>            print a file\n");
+        puts("  cd [path]             change directory\n");
+        puts("  pwd                   print working directory\n");
+        puts("  mkdir <path>          create a directory\n");
+        puts("  rm <path>             remove a file or empty dir\n");
+        puts("  touch <file>          create an empty file\n");
+        puts("  echo <text> [> file]  print text, or write it to a file\n");
+        puts("  clear                 clear the screen\n");
+        puts("anything else runs a ramdisk program (e.g. one, two)\n");
+    }
+
+
     void _start() {
         char line[64];
         for (;;) {
@@ -231,6 +262,10 @@ extern "C" {
             if (streq(argv[0], "rm")) { cmd_rm(argc, argv);      continue; }
             if (streq(argv[0], "echo")) { cmd_echo(argc, argv);  continue; }
             if (streq(argv[0], "cd")) { cmd_cd(argc, argv); continue; }
+            if (streq(argv[0], "pwd")) { cmd_pwd(argc, argv); continue; }
+            if (streq(argv[0], "touch")) { cmd_touch(argc, argv); continue; }
+            if (streq(argv[0], "clear")) { cmd_clear(argc, argv); continue; }
+            if (streq(argv[0], "help")) { cmd_help(argc, argv); continue; }
 
             long pid = sys_fork();
             if (pid == 0) {

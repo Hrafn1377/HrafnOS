@@ -8,6 +8,7 @@ struct Inode {
     uint8_t  type;                 // InodeType
     uint32_t size;                 // file: bytes used; dir: number of entries
     uint32_t blocks[MUNIN_DIRECT]; // direct block indices, or NO_BLOCK
+    uint32_t indirect;             // block of MUNIN_PTRS_PER_BLOCK ptrs, or NO_BLOCK
 };
 
 struct Dirent {
@@ -44,10 +45,52 @@ static int alloc_inode(uint8_t type) {
             g_inodes[i].size = 0;
             for (int b = 0; b < MUNIN_DIRECT; b++)
                 g_inodes[i].blocks[b] = NO_BLOCK;
+            g_inodes[i].indirect = NO_BLOCK;
             return i;
         }
     }
     return -1;
+}
+
+// Map logical block index `b` of inode f to a physical block number.
+// With alloc=true, allocate the data block (and the indirect block) on demand;
+// newly allocated data blocks are zeroed so partial writes read back clean.
+// Returns NO_BLOCK if absent (alloc=false) or out of space.
+static uint32_t block_for(Inode* f, int b, bool alloc) {
+    if (b < 0 || b >= MUNIN_MAX_BLOCKS) return NO_BLOCK;
+
+    if (b < MUNIN_DIRECT) {
+        if (f->blocks[b] == NO_BLOCK) {
+            if (!alloc) return NO_BLOCK;
+            int blk = alloc_block();
+            if (blk < 0) return NO_BLOCK;
+            uint8_t* z = g_blocks[blk];
+            for (uint32_t i = 0; i < MUNIN_BLOCK_SIZE; i++) z[i] = 0;
+            f->blocks[b] = (uint32_t)blk;
+        }
+        return f->blocks[b];
+    }
+
+    // indirect range
+    if (f->indirect == NO_BLOCK) {
+        if (!alloc) return NO_BLOCK;
+        int ib = alloc_block();
+        if (ib < 0) return NO_BLOCK;
+        uint32_t* ip = (uint32_t*)g_blocks[ib];
+        for (uint32_t i = 0; i < MUNIN_PTRS_PER_BLOCK; i++) ip[i] = NO_BLOCK;
+        f->indirect = (uint32_t)ib;
+    }
+    uint32_t* ip = (uint32_t*)g_blocks[f->indirect];
+    int idx = b - MUNIN_DIRECT;
+    if (ip[idx] == NO_BLOCK) {
+        if (!alloc) return NO_BLOCK;
+        int blk = alloc_block();
+        if (blk < 0) return NO_BLOCK;
+        uint8_t* z = g_blocks[blk];
+        for (uint32_t i = 0; i < MUNIN_BLOCK_SIZE; i++) z[i] = 0;
+        ip[idx] = (uint32_t)blk;
+    }
+    return ip[idx];
 }
 
 // Look up a signle component (name, name_len) inside directory `dir`.
@@ -221,6 +264,13 @@ static void free_inode_blocks(Inode* f) {
             f->blocks[b] = NO_BLOCK;
         }
     }
+    if (f->indirect != NO_BLOCK) {
+        uint32_t* ip = (uint32_t*)g_blocks[f->indirect];
+        for (uint32_t i = 0; i < MUNIN_PTRS_PER_BLOCK; i++)
+            if (ip[i] != NO_BLOCK) free_block((int)ip[i]);
+        free_block((int)f->indirect);
+        f->indirect = NO_BLOCK;
+    }
     f->size = 0;
 }
 
@@ -232,18 +282,17 @@ int munin_write(const char* path, const void* buf, uint32_t len) {
     Inode* f = &g_inodes[ino];
     if (f->type != INODE_FILE) return -1;
 
-    uint32_t max_bytes = (uint32_t)MUNIN_DIRECT * MUNIN_BLOCK_SIZE;
-    if (len > max_bytes) return -1;          // exceeds direct-block capacity
+    uint32_t max_bytes = (uint32_t)MUNIN_MAX_BLOCKS * MUNIN_BLOCK_SIZE;
+    if (len > max_bytes) return -1;         // exceeds capacity
 
-    free_inode_blocks(f);                    // truncate existing content
+    free_inode_blocks(f);                  // truncate existing content
 
     const uint8_t* src = (const uint8_t*)buf;
     uint32_t remaining = len;
     int b = 0;
     while (remaining > 0) {
-        int blk = alloc_block();
-        if (blk < 0) { free_inode_blocks(f); return -1; }   // out of space; roll back
-        f->blocks[b] = (uint32_t)blk;
+        uint32_t blk = block_for(f, b, true);
+        if (blk == NO_BLOCK) { free_inode_blocks(f); return -1; }    // out of space
         uint32_t chunk = remaining < MUNIN_BLOCK_SIZE ? remaining : MUNIN_BLOCK_SIZE;
         uint8_t* dst = g_blocks[blk];
         for (uint32_t i = 0; i < chunk; i++) dst[i] = src[i];
@@ -268,9 +317,10 @@ int munin_read(const char* path, void* buf, uint32_t len) {
     uint32_t copied = 0;
     int b = 0;
     while (copied < n) {
-        if (b >= MUNIN_DIRECT || f->blocks[b] == NO_BLOCK) break;   // safety
+        uint32_t blk = block_for(f, b, false);
+        if (blk == NO_BLOCK) break;     // safety
         uint32_t chunk = (n - copied) < MUNIN_BLOCK_SIZE ? (n - copied) : MUNIN_BLOCK_SIZE;
-        uint8_t* srcb = g_blocks[f->blocks[b]];
+        uint8_t* srcb = g_blocks[blk];
         for (uint32_t i = 0; i < chunk; i++) dst[copied + i] = srcb[i];
         copied += chunk;
         b++;
@@ -339,9 +389,9 @@ int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset) {
     Inode* f = &g_inodes[ino];
     if (f->type != INODE_FILE) return -1;
 
-    uint32_t cap = (uint32_t)MUNIN_DIRECT * MUNIN_BLOCK_SIZE;
+    uint32_t cap = (uint32_t)MUNIN_MAX_BLOCKS * MUNIN_BLOCK_SIZE;
     if (offset >= cap) return -1;
-    if (offset + len > cap) len = cap - offset;       // clamp to capacity
+    if (offset + len > cap) len = cap - offset;     // clamp to capacity
 
     const uint8_t* src = (const uint8_t*)buf;
     uint32_t written = 0;
@@ -349,16 +399,11 @@ int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset) {
         uint32_t pos  = offset + written;
         int      b    = (int)(pos / MUNIN_BLOCK_SIZE);
         uint32_t boff = pos % MUNIN_BLOCK_SIZE;
-        if (f->blocks[b] == NO_BLOCK) {
-            int blk = alloc_block();
-            if (blk < 0) break;                    // out of space; partial write
-            f->blocks[b] = (uint32_t)blk;
-            uint8_t* z = g_blocks[blk];            // zero new block (sparse gaps read 0)
-            for (uint32_t i = 0; i < MUNIN_BLOCK_SIZE; i++) z[i] = 0;
-        }
+        uint32_t blk  = block_for(f, b, true);
+        if (blk == NO_BLOCK) break;                 // out of space; partial write
         uint32_t chunk = MUNIN_BLOCK_SIZE - boff;
         if (chunk > len - written) chunk = len - written;
-        uint8_t* dst = g_blocks[f->blocks[b]] + boff;
+        uint8_t* dst = g_blocks[blk] + boff;
         for (uint32_t i = 0; i < chunk; i++) dst[i] = src[written + i];
         written += chunk;
     }
@@ -439,6 +484,7 @@ int munin_unlink(const char* path) {
 // ==============================================================
 
 #define MUNIN_MAGIC 0x4D554E49u         // "MUNI"
+#define MUNIN_VERSION 2
 
 // On-disk layout, in 512-byte sectors:
 //    [0]           superblock
@@ -487,7 +533,7 @@ void munin_flush() {
     for (uint32_t i = 0; i < 512; i++) sb[i] = 0;
     uint32_t* w = (uint32_t*)sb;
     w[0] = MUNIN_MAGIC;
-    w[1] = 1;                // version
+    w[1] = MUNIN_VERSION;                // version
     w[2] = MUNIN_MAX_INODES;
     w[3] = MUNIN_NUM_BLOCKS;
     vblk_write(SB_SECTOR, sb);
@@ -502,8 +548,9 @@ bool munin_mount() {
     uint8_t sb[512];
     vblk_read(SB_SECTOR, sb);
     uint32_t* w = (uint32_t*)sb;
-    if (w[0] != MUNIN_MAGIC || w[2] != MUNIN_MAX_INODES || w[3] != MUNIN_NUM_BLOCKS)
-        return false;        // blank or foreign disk
+    if (w[0] != MUNIN_MAGIC || w[1] != MUNIN_VERSION ||
+        w[2] != MUNIN_MAX_INODES || w[3] != MUNIN_NUM_BLOCKS)
+        return false;        // blank, foreign, or old-version disk
     disk_read_bytes(INODE_SECTOR,   g_inodes,     sizeof(g_inodes));
     disk_read_bytes(BITMAP_SECTOR,  g_block_used, sizeof(g_block_used));
     disk_read_bytes(DATA_SECTOR,    g_blocks,     sizeof(g_blocks));

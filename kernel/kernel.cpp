@@ -81,6 +81,19 @@ extern "C" void kmain(uint64_t mb_info) {
             munin_flush();
             kprint("munin: formatted new filesystem\n");
         }
+
+        {
+            munin_create_path("/bigtest", INODE_FILE);
+            static uint8_t bt[5000], br[5000];
+            for (int i = 0; i < 5000; i++) bt[i] = (uint8_t)(i * 7 + 1);
+            munin_write("/bigtest", bt, 5000);            // > 4 KiB -> uses indirect
+            int n = munin_read("/bigtest", br, 5000);
+            bool ok = (n == 5000);
+            for (int i = 0; ok && i < 5000; i++) if (br[i] != bt[i]) ok = false;
+            munin_unlink("/bigtest");
+            kprint(ok ? "bigfile: 5000B round-trip OK\n" : "bigfile: FAIL\n");
+        }
+        
         kprint("HrafnOS console ready.\n");
     }
 

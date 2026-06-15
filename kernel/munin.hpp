@@ -50,6 +50,8 @@ int munin_write_inode(int ino, const void* buf, uint32_t len, uint32_t offset);
 
 // Directory enumeration: entry `index` of dir inode -> name + chile type (step 2c).
 int munin_dirent(int dir, int index, char* name_out, uint32_t cap);
+#define MUNIN_PTRS_PER_BLOCK (MUNIN_BLOCK_SIZE / 4)      // 128 ptrs in an indirect block
+#define MUNIN_MAX_BLOCKS  (MUNIN_DIRECT + MUNIN_PTRS_PER_BLOCK)  // 136 blocks = 68 KiB/file
 
 // Remove a file or empty directory by absolute path. 0 on success, -1 on error (step 3a).
 int munin_unlink(const char* path);

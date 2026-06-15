@@ -17,3 +17,5 @@ void fb_scroll_up(uint32_t lines, uint32_t color);
 uint32_t fb_width();
 uint32_t fb_height();
 bool     fb_ready();
+volatile uint8_t* fb_base();
+uint32_t          fb_pitch();

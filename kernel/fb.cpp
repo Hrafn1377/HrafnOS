@@ -27,6 +27,8 @@ static uint32_t          g_bpp      = 0;
 bool fb_ready()  { return g_fb != nullptr; }
 uint32_t fb_width()  { return g_width; }
 uint32_t fb_height() { return g_height; }
+volatile uint8_t* fb_base() { return g_fb; }
+uint32_t          fb_pitch() { return g_pitch; }
 
 bool fb_init(uint64_t mb_info_addr) {
     mb_tag*      tag = (mb_tag*)(mb_info_addr + 8);     // skip total_size + reserved

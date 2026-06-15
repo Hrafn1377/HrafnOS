@@ -60,3 +60,32 @@ Surface gfx_screen() {
     s.pitch  = fb_pitch() / 4;   // bytes -> pixels
     return s;
 }
+
+// ---- double buffering (step 2) ----
+// Fixed max geometry; the active screen (<= this) is what we present
+#define GFX_BB_W 1024
+#define GFX_BB_H 768
+static uint32_t g_backbuf[GFX_BB_W * GFX_BB_H];     // 3MiB, in BSS (identity-mapped)
+
+Surface gfx_backbuffer() {
+    Surface s;
+    s.pixels = g_backbuf;
+    s.width  = fb_width();  // visible region (clipping target)
+    s.height = fb_height();
+    s.pitch  = GFX_BB_W;    // fixed row stride
+    return s;
+}
+
+// Blit the back buffer to the hardware framebuffer.
+void gfx_present() {
+    volatile uint8_t* fb = fb_base();
+    if (!fb) return;
+    uint32_t pitch = fb_pitch();
+    uint32_t w = fb_width();
+    uint32_t h = fb_height();
+    for (uint32_t y = 0; y < h; y++) {
+        volatile uint32_t* dst = (volatile uint32_t*)(fb + (uint64_t)y * pitch);
+        uint32_t*          src = g_backbuf + (uint64_t)y * GFX_BB_W;
+        for (uint32_t x = 0; x < w; x++) dst[x] = src[x];
+    }
+}

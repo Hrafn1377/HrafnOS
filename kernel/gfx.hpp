@@ -22,3 +22,5 @@ void gfx_line       (Surface* s, int x0, int y0, int x1, int y1, uint32_t color)
 
 // A Surface wrapping the hardware framebuffer.
 Surface gfx_screen();
+Surface gfx_backbuffer();    // off-screen Surface to draw into
+void    gfx_present();       // blit the back buffer to the screen

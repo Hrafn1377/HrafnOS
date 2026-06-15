@@ -102,7 +102,9 @@ extern "C" uint64_t isr_handler(registers* regs) {
                     for (uint64_t i = 0; i < len; i++) kprint_char(buf[i]);
                     regs->rax = len;
                 } else {                                // a real file
-                    regs->rax = (uint64_t)vfs_write(fd, buf, (uint32_t)len);
+                    long n = vfs_write(fd, buf, (uint32_t)len);
+                    regs->rax = (uint64_t)n;
+                    if (n > 0) vfs_sync();             // auto-flush on file write
                 }
                 break;
             }
@@ -125,21 +127,31 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 }
                 break;
             }
-            case SYS_OPEN:
-                regs->rax = (uint64_t)vfs_open((const char*)regs->rdi, (int)regs->rsi);
+            case SYS_OPEN: {
+                int  flags = (int)regs->rsi;
+                long fd    = vfs_open((const char*)regs->rdi, flags);
+                regs->rax  = (uint64_t)fd;
+                if (fd >= 0 && (flags & (O_CREAT | O_TRUNC))) vfs_sync();
                 break;
+            }
             case SYS_CLOSE:
                 regs->rax = (uint64_t)vfs_close((int)regs->rdi);
                 break;
             case SYS_READDIR:
                 regs->rax = (uint64_t)vfs_readdir((int)regs->rdi, (int)regs->rsi, (char*)regs->rdx);
                 break;
-            case SYS_MKDIR:
-                regs->rax = (uint64_t)vfs_mkdir((const char*)regs->rdi);
+            case SYS_MKDIR: {
+                long r    = vfs_mkdir((const char*)regs->rdi);
+                regs->rax = (uint64_t)r;
+                if (r == 0) vfs_sync();
                 break;
-            case SYS_UNLINK:
-                regs->rax = (uint64_t)vfs_unlink((const char*)regs->rdi);
+            }
+            case SYS_UNLINK: {
+                long r    = vfs_unlink((const char*)regs->rdi);
+                regs->rax = (uint64_t)r;
+                if (r == 0) vfs_sync();
                 break;
+            }
             case SYS_SYNC:
                 regs->rax = (uint64_t)vfs_sync();
                 break;

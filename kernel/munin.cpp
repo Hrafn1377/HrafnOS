@@ -539,7 +539,9 @@ void munin_flush() {
     vblk_write(SB_SECTOR, sb);
     disk_write_bytes(INODE_SECTOR,  g_inodes,     sizeof(g_inodes));
     disk_write_bytes(BITMAP_SECTOR, g_block_used, sizeof(g_block_used));
-    disk_write_bytes(DATA_SECTOR,   g_blocks,     sizeof(g_blocks));
+    for (uint32_t b = 0; b < MUNIN_NUM_BLOCKS; b++)         // data: live blocks only
+        if (g_block_used[b / 8] & (1u << (b % 8)))
+        vblk_write(DATA_SECTOR + b, g_blocks[b]);
 }
 
 // Load the filesystem from disk if a valid superblock is present.
@@ -553,6 +555,8 @@ bool munin_mount() {
         return false;        // blank, foreign, or old-version disk
     disk_read_bytes(INODE_SECTOR,   g_inodes,     sizeof(g_inodes));
     disk_read_bytes(BITMAP_SECTOR,  g_block_used, sizeof(g_block_used));
-    disk_read_bytes(DATA_SECTOR,    g_blocks,     sizeof(g_blocks));
+    for (uint32_t b = 0; b < MUNIN_NUM_BLOCKS; b++)        // data: live blocks only
+        if (g_block_used[b / 8] & (1u << (b % 8)))
+            vblk_read(DATA_SECTOR + b, g_blocks[b]);
     return true;
 }

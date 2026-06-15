@@ -10,3 +10,5 @@ void pic_send_eoi(uint8_t irq);
 
 // Programs PIT channel 0 to fire IRQ0 at the given frequency (Hz).
 void pit_init(uint32_t hz);
+
+void pic_unmask(uint8_t irq);

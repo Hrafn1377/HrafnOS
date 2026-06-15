@@ -29,13 +29,21 @@ void pic_remap() {
     outb(PIC2_DATA, 0x01); io_wait();
 
     // Masks: unmask only IRQ0 (timer) on the master; mask everything else.
-    outb(PIC1_DATA, 0xFC);   // 1111 1110 -> IRQ0 (timer) + IRQ1 (keyboard)
+    outb(PIC1_DATA, 0xF8);   // unmask IRQ0 (timer), IRQ1 (keyboard), IRQ2 (slave cascade)
     outb(PIC2_DATA, 0xFF);   // all slave lines masked
 }
 
 void pic_send_eoi(uint8_t irq) {
     if (irq >= 8) outb(PIC2_CMD, PIC_EOI);   // slave first, if applicable
     outb(PIC1_CMD, PIC_EOI);
+}
+
+void pic_unmask(uint8_t irq) {
+    uint16_t port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
+    uint8_t  bit  = (irq < 8) ? irq : (uint8_t)(irq - 8);
+    uint8_t  mask = inb(port);
+    mask &= ~(1u << bit);
+    outb(port, mask);
 }
 
 void pit_init(uint32_t hz) {

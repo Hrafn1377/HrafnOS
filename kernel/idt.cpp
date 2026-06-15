@@ -6,6 +6,7 @@
 #include "io.hpp"
 #include "kbd.hpp"
 #include "vfs.hpp"
+#include "mouse.hpp"
 
 struct idt_entry {
     uint16_t offset_low;
@@ -85,6 +86,11 @@ extern "C" uint64_t isr_handler(registers* regs) {
             if (c >= ' ' || c == '\n' || c == '\b' || c == '\t')  // printable + newline + bksp + tab 
                 kbd_buffer_push(c);
             pic_send_eoi(1);
+            return (uint64_t)regs;
+        }
+        if (irq == 12) {                    // PS/2 mouse
+            mouse_irq();
+            pic_send_eoi(12);
             return (uint64_t)regs;
         }
     }

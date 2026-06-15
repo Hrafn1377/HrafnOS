@@ -17,6 +17,7 @@
 #include "pci.hpp"
 #include "vblk.hpp"
 #include "gfx.hpp"
+#include "mouse.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -96,8 +97,18 @@ extern "C" void kmain(uint64_t mb_info) {
     }
     kprint_char('\n');
 
+    mouse_init();
     sched_init();
-    spawn("huginn");
+    {
+        Surface bb = gfx_backbuffer();
+        asm volatile("sti");
+        for (;;) {
+            gfx_clear(&bb, RGB(30, 30, 60));            // desktop background
+            gfx_cursor(&bb, mouse_x(), mouse_y());      // arrow at mouse position
+            gfx_present();
+            for (volatile int d = 0; d < 300000; d++) { }   // frame pace
+        }
+    }
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");
 
     asm volatile("sti");

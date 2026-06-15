@@ -89,3 +89,32 @@ void gfx_present() {
         for (uint32_t x = 0; x < w; x++) dst[x] = src[x];
     }
 }
+
+// A classic arrow cursor. 0 = transparent, 1 = black outline, 2 = white fill.
+void gfx_cursor(Surface* s, int x, int y) {
+    static const uint8_t C[17][12] = {
+        {1},
+        {1,1},
+        {1,2,1},
+        {1,2,2,1},
+        {1,2,2,2,1},
+        {1,2,2,2,2,1},
+        {1,2,2,2,2,2,1},
+        {1,2,2,2,2,2,2,1},
+        {1,2,2,2,2,2,2,2,1},
+        {1,2,2,2,2,2,2,2,2,1},
+        {1,2,2,2,2,2,1,1,1,1,1},
+        {1,2,2,1,2,2,1},
+        {1,2,1,0,1,2,2,1},
+        {1,1,0,0,1,2,2,1},
+        {1,0,0,0,0,1,2,2,1},
+        {0,0,0,0,0,1,2,2,1},
+        {0,0,0,0,0,0,1,1,1},
+    };
+    for (int row = 0; row < 17; row++)
+        for (int col = 0; col < 12; col++) {
+            uint8_t p = C[row][col];
+            if      (p == 1) gfx_putpixel(s, x + col, y + row, RGB(0, 0, 0));
+            else if (p == 2) gfx_putpixel(s, x + col, y + row, RGB(255, 255, 255));
+        }
+}

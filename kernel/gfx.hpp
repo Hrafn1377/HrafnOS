@@ -25,3 +25,5 @@ Surface gfx_screen();
 Surface gfx_backbuffer();    // off-screen Surface to draw into
 void    gfx_present();       // blit the back buffer to the screen
 void gfx_cursor(Surface* s, int x, int y);
+void gfx_char(Surface* s, int x, int y, char c, uint32_t color);
+void gfx_text(Surface* s, int x, int y, const char* str, uint32_t color);

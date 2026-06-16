@@ -1,5 +1,6 @@
 #include "gfx.hpp"
 #include "fb.hpp"
+#include "font.hpp"
 
 void gfx_putpixel(Surface* s, int x, int y, uint32_t color) {
     if (x < 0 || y < 0 || x >= (int)s->width || y >= (int)s->height) return;
@@ -117,4 +118,22 @@ void gfx_cursor(Surface* s, int x, int y) {
             if      (p == 1) gfx_putpixel(s, x + col, y + row, RGB(0, 0, 0));
             else if (p == 2) gfx_putpixel(s, x + col, y + row, RGB(255, 255, 255));
         }
+}
+
+void gfx_char(Surface* s, int x, int y, char c, uint32_t color) {
+    const uint8_t* g = font_glyph((uint8_t)c);
+    for (int row = 0; row < (int)FONT_H; row++) {
+        uint8_t bits = g[row];
+        for (int col = 0; col < (int)FONT_W; col++)
+            if (bits & (0x80 >> col)) gfx_putpixel(s, x + col, y + row, color);
+    }
+}
+
+void gfx_text(Surface* s, int x, int y, const char* str, uint32_t color) {
+    int cx = x, cy = y;
+    for (const char* p = str; *p; p++) {
+        if (*p == '\n') { cx = x; cy += (int)FONT_H; continue; }
+        gfx_char(s, cx, cy, *p, color);
+        cx += (int)FONT_W;
+    }
 }

@@ -101,9 +101,9 @@ extern "C" void kmain(uint64_t mb_info) {
     mouse_init();
     sched_init();
     {
-        window_create(120, 100, 280, 200, RGB(235, 235, 240));
-        window_create(360, 220, 300, 180, RGB(220, 230, 245));
-        window_create(200, 320, 260, 160, RGB(245, 235, 220));
+        window_create(120, 100, 280, 200, RGB(235, 235, 240), "Files");
+        window_create(360, 220, 300, 180, RGB(220, 230, 245), "Editor");
+        window_create(200, 320, 260, 160, RGB(245, 235, 220), "Terminal");
 
         Surface bb = gfx_backbuffer();
         asm volatile("sti");

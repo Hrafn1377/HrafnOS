@@ -71,8 +71,10 @@ kernel/gfx.o: kernel/gfx.cpp kernel/gfx.hpp
 	$(CXX) $(CXXFLAGS) -c kernel/gfx.cpp -o kernel/gfx.o
 kernel/mouse.o: kernel/mouse.cpp kernel/mouse.hpp
 	$(CXX) $(CXXFLAGS) -c kernel/mouse.cpp -o kernel/mouse.o
+kernel/window.o: kernel/window.cpp kernel/window.hpp
+	$(CXX) $(CXXFLAGS) -c kernel/window.cpp -o kernel/window.o
 
-OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/kbd.o kernel/console.o kernel/font.o kernel/ramdisk.o kernel/munin.o kernel/vfs.o kernel/pci.o kernel/vblk.o kernel/gfx.o kernel/mouse.o kernel/embed.o
+OBJS = boot/boot.o kernel/kernel.o kernel/serial.o kernel/heap.o kernel/idt.o kernel/isr.o kernel/pic.o kernel/pmm.o kernel/vmm.o kernel/sched.o kernel/gdt.o kernel/elf.o kernel/fb.o kernel/kbd.o kernel/console.o kernel/font.o kernel/ramdisk.o kernel/munin.o kernel/vfs.o kernel/pci.o kernel/vblk.o kernel/gfx.o kernel/mouse.o kernel/window.o kernel/embed.o
 
 iso/boot/hrafnos.bin: $(OBJS)
 	x86_64-elf-ld -T linker.ld -o iso/boot/hrafnos.bin $(OBJS)

@@ -18,6 +18,7 @@
 #include "vblk.hpp"
 #include "gfx.hpp"
 #include "mouse.hpp"
+#include "window.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -100,13 +101,23 @@ extern "C" void kmain(uint64_t mb_info) {
     mouse_init();
     sched_init();
     {
+        window_create(120, 100, 280, 200, RGB(235, 235, 240));
+        window_create(360, 220, 300, 180, RGB(220, 230, 245));
+        window_create(200, 320, 260, 160, RGB(245, 235, 220));
+
         Surface bb = gfx_backbuffer();
         asm volatile("sti");
         for (;;) {
-            gfx_clear(&bb, RGB(30, 30, 60));            // desktop background
-            gfx_cursor(&bb, mouse_x(), mouse_y());      // arrow at mouse position
+            int  mx   = mouse_x();
+            int  my   = mouse_y();
+            bool left = mouse_buttons() & 1;
+
+            window_handle(mx, my, left);   // raise / drag
+            window_compose(&bb);           // desktop + windows
+            gfx_cursor(&bb, mx, my);       // pointer on top
             gfx_present();
-            for (volatile int d = 0; d < 300000; d++) { }   // frame pace
+
+            for (volatile int d = 0; d < 300000; d++) { }
         }
     }
     kprint("HrafnOS shell. Type 'help' for a list of commands.\n");

@@ -19,6 +19,7 @@
 #include "gfx.hpp"
 #include "mouse.hpp"
 #include "window.hpp"
+#include "term.hpp"
 
 // Look a program up in the ramdisk, load it into a fresh address space, give it
 // a user stack, and queue it as a ring-3 task.
@@ -100,10 +101,12 @@ extern "C" void kmain(uint64_t mb_info) {
 
     mouse_init();
     sched_init();
+    term_init();
+    spawn("huginn");
     {
-        window_create(120, 100, 280, 200, RGB(235, 235, 240), "Files");
-        window_create(360, 220, 300, 180, RGB(220, 230, 245), "Editor");
-        window_create(200, 320, 260, 160, RGB(245, 235, 220), "Terminal");
+       window_create(20,  20, 180, 120, RGB(235, 235, 240), "Files");
+        window_create(760, 20, 240, 150, RGB(220, 230, 245), "Editor");
+        window_create(220, 120, 520, 352, RGB(15, 15, 25), "Terminal", true);
 
         Surface bb = gfx_backbuffer();
         asm volatile("sti");

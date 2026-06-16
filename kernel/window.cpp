@@ -1,5 +1,6 @@
 #include "window.hpp"
 #include "font.hpp"
+#include "term.hpp"
 
 #define WIN_MAX          16
 #define TITLEBAR_H       24
@@ -8,16 +9,16 @@
 #define TITLE_ACTIVE     RGB(80, 130, 220)
 #define BORDER_COLOR     RGB(200, 200, 210)
 
-struct Window { int x, y, w, h; uint32_t content; const char* title; };
+struct Window { int x, y, w, h; uint32_t content; const char* title; bool is_term; };
 static Window g_win[WIN_MAX];
 static int    g_count = 0;
 
 static int  g_drag = -1, g_off_x = 0, g_off_y = 0;
 static bool g_last_left = false;
 
-void window_create(int x, int y, int w, int h, uint32_t content_color, const char* title) {
+void window_create(int x, int y, int w, int h, uint32_t content_color, const char* title, bool is_term) {
     if (g_count >= WIN_MAX) return;
-    g_win[g_count] = Window{ x, y, w, h, content_color, title };
+    g_win[g_count] = Window{ x, y, w, h, content_color, title, is_term };
     g_count++;
 }
 
@@ -27,9 +28,13 @@ void window_compose(Surface* s) {
        Window* w = &g_win[i];
         bool active = (i == g_count - 1);
         gfx_fill_rect(s, w->x, w->y, w->w, TITLEBAR_H, active ? TITLE_ACTIVE : TITLE_INACTIVE);
-        if (w->title)
-            gfx_text(s, w->x + 6, w->y + (TITLEBAR_H - (int)FONT_H) / 2, w->title, RGB(240, 240, 255));
+        if (w->title) {
+            int tx = w->x + 6, ty = w->y + (TITLEBAR_H - (int)FONT_H) / 2;
+            gfx_text(s, tx + 1, ty + 1, w->title, RGB(20, 30, 60));    // shadow
+            gfx_text(s, tx,     ty,     w->title, RGB(255, 255, 255)); // text
+        }
         gfx_fill_rect(s, w->x, w->y + TITLEBAR_H, w->w, w->h - TITLEBAR_H, w->content);
+        if (w->is_term) term_render(s, w->x + 4, w->y + TITLEBAR_H + 4);
         gfx_rect(s, w->x, w->y, w->w, w->h, BORDER_COLOR);
     }
 }

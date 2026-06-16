@@ -7,6 +7,7 @@
 #include "kbd.hpp"
 #include "vfs.hpp"
 #include "mouse.hpp"
+#include "term.hpp"
 
 struct idt_entry {
     uint16_t offset_low;
@@ -104,8 +105,8 @@ extern "C" uint64_t isr_handler(registers* regs) {
                 int         fd  = (int)regs->rdi;
                 const char* buf = (const char*)regs->rsi;
                 uint64_t    len = regs->rdx;
-                if (fd == 1 || fd == 2) {              // stdout / stderr -> console
-                    for (uint64_t i = 0; i < len; i++) kprint_char(buf[i]);
+                if (fd == 1 || fd == 2) {              // stdout / stderr -> terminal window
+                    for (uint64_t i = 0; i < len; i++) term_putchar(buf[i]);
                     regs->rax = len;
                 } else {                                // a real file
                     long n = vfs_write(fd, buf, (uint32_t)len);
